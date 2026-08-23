@@ -246,3 +246,74 @@ def test_list_by_author_returns_newest_first(repository: SQLitePlaceRepository) 
     results = repository.list_by_author(42)
 
     assert [place.id for place in results] == [second.id, first.id]
+
+
+def test_find_duplicates_matches_same_name_within_radius(
+    repository: SQLitePlaceRepository,
+) -> None:
+    repository.add(make_place(name="Газпром", latitude=55.7500, longitude=37.6100))
+
+    duplicates = repository.find_duplicates(
+        name="Газпром",
+        coordinates=Coordinates(latitude=55.7501, longitude=37.6100),
+        radius_meters=200,
+    )
+
+    assert [place.name for place in duplicates] == ["Газпром"]
+
+
+def test_find_duplicates_ignores_same_name_outside_radius(
+    repository: SQLitePlaceRepository,
+) -> None:
+    repository.add(make_place(name="Газпром", latitude=55.7500, longitude=37.6100))
+
+    duplicates = repository.find_duplicates(
+        name="Газпром",
+        # ~1.1 km away.
+        coordinates=Coordinates(latitude=55.7600, longitude=37.6100),
+        radius_meters=200,
+    )
+
+    assert duplicates == []
+
+
+def test_find_duplicates_matches_a_containing_name(
+    repository: SQLitePlaceRepository,
+) -> None:
+    repository.add(make_place(name="Газпром", latitude=55.7500, longitude=37.6100))
+
+    duplicates = repository.find_duplicates(
+        name="Газпром 24",
+        coordinates=Coordinates(latitude=55.7500, longitude=37.6100),
+        radius_meters=200,
+    )
+
+    assert [place.name for place in duplicates] == ["Газпром"]
+
+
+def test_find_duplicates_ignores_a_different_name_nearby(
+    repository: SQLitePlaceRepository,
+) -> None:
+    repository.add(make_place(name="Газпром", latitude=55.7500, longitude=37.6100))
+
+    duplicates = repository.find_duplicates(
+        name="Лукойл",
+        coordinates=Coordinates(latitude=55.7500, longitude=37.6100),
+        radius_meters=200,
+    )
+
+    assert duplicates == []
+
+
+def test_find_duplicates_matches_across_alphabets(
+    repository: SQLitePlaceRepository,
+) -> None:
+    repository.add(make_place(name="Газпром", latitude=55.7500, longitude=37.6100))
+
+    duplicates = repository.find_duplicates(
+        name="Gazprom",
+        coordinates=Coordinates(latitude=55.7500, longitude=37.6100),
+        radius_meters=200,
+    )
+
+    assert [place.name for place in duplicates] == ["Газпром"]

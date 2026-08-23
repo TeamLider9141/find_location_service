@@ -7,6 +7,7 @@ from sqlite3 import Row
 
 from app.application.name_normalization import normalize_name
 from app.domain.entities.community_place import Place
+from app.domain.interfaces.community_places import DEFAULT_DUPLICATE_RADIUS_METERS
 from app.domain.value_objects.category import PlaceCategory
 from app.domain.value_objects.coordinates import Coordinates
 
@@ -142,6 +143,23 @@ class SQLitePlaceRepository:
 
         return [_map_row(row) for row in rows]
 
+    def find_duplicates(
+        self,
+        name: str,
+        coordinates: Coordinates,
+        radius_meters: int = DEFAULT_DUPLICATE_RADIUS_METERS,
+    ) -> list[Place]:
+        normalized_name = normalize_name(name)
+        if not normalized_name:
+            return []
+
+        candidates = self.nearby(coordinates, radius_meters, limit=_DUPLICATE_SCAN_LIMIT)
+        return [
+            place
+            for place in candidates
+            if _names_overlap(normalized_name, normalize_name(place.name))
+        ]
+
     def _initialize(self) -> None:
         with self._connect() as connection:
             connection.execute(
@@ -182,6 +200,13 @@ class SQLitePlaceRepository:
 def _escape_like(value: str) -> str:
     """Neutralize LIKE wildcards so a name containing % or _ still matches literally."""
     return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
+_DUPLICATE_SCAN_LIMIT = 50
+
+
+def _names_overlap(left: str, right: str) -> bool:
+    return left in right or right in left
 
 
 @dataclass(frozen=True)
