@@ -128,6 +128,8 @@ class SQLitePlaceRepository:
         return [place for _, place in within_radius[: max(limit, 0)]]
 
     def list_by_author(self, user_id: int) -> list[Place]:
+        # Newest first by id, not created_at: CURRENT_TIMESTAMP has one-second
+        # resolution, so places added together would tie and order arbitrarily.
         with self._connect() as connection:
             rows = connection.execute(
                 f"""
