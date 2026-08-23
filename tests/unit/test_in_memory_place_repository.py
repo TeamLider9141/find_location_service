@@ -264,3 +264,15 @@ def test_add_rejects_a_non_enum_category_rather_than_storing_it() -> None:
         repository.add(make_place(category="fuel"))  # type: ignore[arg-type]
 
     assert repository.search() == []
+
+
+def test_add_rejects_none_as_a_category_rather_than_storing_it() -> None:
+    # category is required here, unlike the optional filter parameter on
+    # search/nearby/update: None must raise, not be treated as "no filter".
+    # A stored None would poison every later category-filtered read.
+    repository = InMemoryPlaceRepository()
+
+    with pytest.raises(AttributeError):
+        repository.add(make_place(category=None))  # type: ignore[arg-type]
+
+    assert repository.search() == []

@@ -16,11 +16,12 @@ class InMemoryPlaceRepository:
         self._next_id = 1
 
     def add(self, place: Place) -> Place:
-        # The real repository reads category.value while building its INSERT, so
-        # it rejects a non-enum before anything is stored. Storing the raw value
-        # instead would leave a Place whose category is not a PlaceCategory, and
-        # every later read of that place would carry it.
-        _category_value(place.category)
+        # Unlike search/nearby/update, category is required here, not optional,
+        # so _category_value (which treats None as "no filter") is the wrong
+        # guard: None must raise, not pass through. Read .value directly, the
+        # same attribute access the real INSERT performs, so a raw string or a
+        # None both raise AttributeError before anything is stored.
+        _ = place.category.value
 
         # The real repository leaves created_at out of its INSERT, so the column
         # takes CURRENT_TIMESTAMP and whatever the caller passed is discarded.
