@@ -4083,7 +4083,11 @@ def _parse_id_and_category(data: str | None) -> tuple[int, PlaceCategory] | None
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `python -m pytest tests/unit/test_my_places_handlers.py -v`
-Expected: PASS (7 passed)
+Expected: PASS (22 passed — the 7 above plus fifteen more: the category prompt
+keyboard and its non-numeric payload, one card per place, a forged negative id,
+a category change that leaves the name and note alone, the `sqlite3.Error` path
+of listing, updating and deleting, the expired-message guard running before the
+delete, and cancel-delete both with and without a message)
 
 - [ ] **Step 5: Commit**
 
