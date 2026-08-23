@@ -2575,7 +2575,8 @@ not the human-readable `"55.75, 37.61"` line above it. Both appear in the card.
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `python -m pytest tests/unit/test_place_formatters.py -v`
-Expected: PASS (6 passed)
+Expected: PASS (11 passed — the 6 below plus the map link itself, sub-kilometre
+distances, distance-to-place pairing, the no-distance list and result notes)
 
 - [ ] **Step 5: Commit**
 
