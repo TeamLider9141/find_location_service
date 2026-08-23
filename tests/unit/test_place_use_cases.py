@@ -12,7 +12,7 @@ from app.application.use_cases.places import (
     NearbyPlacesUseCase,
     UpdatePlaceUseCase,
 )
-from app.domain.entities.community_place import Place
+from app.domain.entities.place import Place
 from app.domain.value_objects.category import PlaceCategory
 from app.domain.value_objects.coordinates import Coordinates
 from app.infrastructure.repositories.in_memory_places import InMemoryPlaceRepository

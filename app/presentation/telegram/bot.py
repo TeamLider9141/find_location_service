@@ -10,7 +10,7 @@ from app.application.use_cases.places import (
     UpdatePlaceUseCase,
 )
 from app.config.settings import Settings
-from app.domain.interfaces.community_places import PlaceRepository
+from app.domain.interfaces.places import PlaceRepository
 from app.infrastructure.database.sqlite_places import SQLitePlaceRepository
 from app.presentation.telegram.handlers import add_place, find_place, my_places, start
 from app.presentation.telegram.handlers import settings as settings_handlers

@@ -23,9 +23,3 @@ def build_main_menu_keyboard() -> ReplyKeyboardMarkup:
         ],
         resize_keyboard=True,
     )
-
-
-# Deprecated aliases kept until the old handlers are removed (Task 24).
-SEARCH_LOCATION_BUTTON = SEARCH_BUTTON
-ADD_LOCATION_BUTTON = ADD_PLACE_BUTTON
-SAVED_LOCATIONS_BUTTON = MY_PLACES_BUTTON

@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from app.domain.entities.community_place import Place
+from app.domain.entities.place import Place
 from app.domain.value_objects.category import PlaceCategory
 from app.domain.value_objects.coordinates import Coordinates
 from app.presentation.telegram.formatters import (

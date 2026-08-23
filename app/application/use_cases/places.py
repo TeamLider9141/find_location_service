@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 
-from app.domain.entities.community_place import Place
-from app.domain.interfaces.community_places import (
+from app.domain.entities.place import Place
+from app.domain.interfaces.places import (
     DEFAULT_DUPLICATE_RADIUS_METERS,
     PlaceRepository,
 )

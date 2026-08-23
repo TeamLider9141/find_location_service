@@ -2,7 +2,7 @@ from datetime import datetime
 
 import pytest
 
-from app.domain.entities.community_place import Place
+from app.domain.entities.place import Place
 from app.domain.value_objects.category import PlaceCategory
 from app.domain.value_objects.coordinates import Coordinates
 from app.infrastructure.database.sqlite_places import SQLitePlaceRepository

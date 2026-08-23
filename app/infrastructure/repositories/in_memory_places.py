@@ -2,8 +2,8 @@ from dataclasses import replace
 from datetime import datetime, timezone
 
 from app.application.name_normalization import normalize_name
-from app.domain.entities.community_place import Place
-from app.domain.interfaces.community_places import DEFAULT_DUPLICATE_RADIUS_METERS
+from app.domain.entities.place import Place
+from app.domain.interfaces.places import DEFAULT_DUPLICATE_RADIUS_METERS
 from app.domain.value_objects.category import PlaceCategory
 from app.domain.value_objects.coordinates import Coordinates
 
