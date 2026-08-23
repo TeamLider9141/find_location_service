@@ -74,3 +74,107 @@ def test_find_duplicates_matches_overlapping_names_in_radius() -> None:
     )
 
     assert [place.name for place in duplicates] == ["Газпром"]
+
+
+def test_update_by_another_user_changes_nothing() -> None:
+    repository = InMemoryPlaceRepository()
+    stored = repository.add(make_place(name="Газпром", user_id=42))
+
+    assert repository.update(stored.id, user_id=7, name="Взломано") is None
+    unchanged = repository.get(stored.id)
+    assert unchanged is not None
+    assert unchanged.name == "Газпром"
+
+
+def test_update_by_the_author_changes_the_name() -> None:
+    repository = InMemoryPlaceRepository()
+    stored = repository.add(make_place(name="Газпром", user_id=42))
+
+    updated = repository.update(stored.id, user_id=42, name="Лукойл")
+
+    assert updated is not None
+    assert updated.name == "Лукойл"
+
+
+def test_update_with_an_empty_note_clears_it() -> None:
+    repository = InMemoryPlaceRepository()
+    stored = repository.add(make_place(note="кругл", user_id=42))
+
+    updated = repository.update(stored.id, user_id=42, note="")
+
+    assert updated is not None
+    assert updated.note == ""
+
+
+def test_update_with_none_leaves_fields_alone() -> None:
+    repository = InMemoryPlaceRepository()
+    stored = repository.add(make_place(name="Газпром", note="кругл", user_id=42))
+
+    updated = repository.update(stored.id, user_id=42, category=PlaceCategory.CAFE)
+
+    assert updated is not None
+    assert updated.name == "Газпром"
+    assert updated.note == "кругл"
+
+
+def test_find_duplicates_ignores_a_stored_blank_name() -> None:
+    # One row with a blank name must not report itself as everyone's duplicate:
+    # every string contains the empty string. This was a real bug in the SQLite
+    # repository, and a double without the same guard would hide it.
+    repository = InMemoryPlaceRepository()
+    repository.add(make_place(name="   ", latitude=55.7500, longitude=37.6100))
+
+    duplicates = repository.find_duplicates(
+        name="Лукойл",
+        coordinates=Coordinates(latitude=55.7500, longitude=37.6100),
+        radius_meters=200,
+    )
+
+    assert duplicates == []
+
+
+def test_list_by_author_returns_newest_first() -> None:
+    repository = InMemoryPlaceRepository()
+    repository.add(make_place(name="Первое", user_id=42))
+    repository.add(make_place(name="Второе", user_id=42))
+    repository.add(make_place(name="Чужое", user_id=7))
+
+    results = repository.list_by_author(user_id=42)
+
+    assert [place.name for place in results] == ["Второе", "Первое"]
+
+
+def test_nearby_with_a_negative_limit_returns_nothing() -> None:
+    # Matches the real repository, which clamps with max(limit, 0). Two places
+    # inside the radius, because a raw negative slice on a one-element list
+    # comes out empty by accident and would pass against the bug.
+    repository = InMemoryPlaceRepository()
+    repository.add(make_place(name="Ближе", latitude=55.7510, longitude=37.6100))
+    repository.add(make_place(name="Дальше", latitude=55.7600, longitude=37.6100))
+
+    results = repository.nearby(
+        Coordinates(latitude=55.7500, longitude=37.6100),
+        radius_meters=5_000,
+        limit=-1,
+    )
+
+    assert results == []
+
+
+def test_search_with_a_negative_limit_returns_everything() -> None:
+    # SQLite reads a negative LIMIT as "no limit"; the double copies that.
+    repository = InMemoryPlaceRepository()
+    repository.add(make_place(name="Альфа"))
+    repository.add(make_place(name="Бета"))
+
+    assert len(repository.search(limit=-1)) == 2
+
+
+def test_add_stamps_created_at_instead_of_trusting_the_caller() -> None:
+    # The real INSERT omits created_at, so CURRENT_TIMESTAMP always wins.
+    repository = InMemoryPlaceRepository()
+
+    stored = repository.add(make_place())
+
+    assert stored.created_at != datetime(2026, 1, 1)
+    assert stored.created_at.tzinfo is None
