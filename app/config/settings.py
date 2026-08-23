@@ -7,9 +7,6 @@ from typing import Mapping
 @dataclass(frozen=True)
 class Settings:
     telegram_bot_token: str | None = None
-    nominatim_base_url: str = "https://nominatim.openstreetmap.org"
-    overpass_base_url: str = "https://overpass-api.de/api"
-    nominatim_user_agent: str = "find-location-bot/0.1"
     database_path: str = "data/find_location.sqlite3"
 
     @classmethod
@@ -27,18 +24,6 @@ class Settings:
 
         return cls(
             telegram_bot_token=values.get("TELEGRAM_BOT_TOKEN") or None,
-            nominatim_base_url=values.get(
-                "NOMINATIM_BASE_URL",
-                cls.nominatim_base_url,
-            ),
-            overpass_base_url=values.get(
-                "OVERPASS_BASE_URL",
-                cls.overpass_base_url,
-            ),
-            nominatim_user_agent=values.get(
-                "NOMINATIM_USER_AGENT",
-                cls.nominatim_user_agent,
-            ),
             database_path=values.get("DATABASE_PATH", cls.database_path),
         )
 

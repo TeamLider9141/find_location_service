@@ -1,10 +1,9 @@
-from app.domain.entities.location import Location
-from app.domain.value_objects.coordinates import Coordinates
-from app.presentation.telegram.handlers.start import handle_cancel
-from app.presentation.telegram.selection_store import (
-    InMemoryAddLocationFlowStore,
-    InMemoryLocationSelectionStore,
-)
+from aiogram.fsm.context import FSMContext
+from aiogram.fsm.storage.base import StorageKey
+from aiogram.fsm.storage.memory import MemoryStorage
+
+from app.presentation.telegram.handlers.start import handle_cancel, handle_start
+from app.presentation.telegram.states import AddPlace
 
 
 class FakeUser:
@@ -21,31 +20,56 @@ class FakeMessage:
         self.answers.append({"text": text, **kwargs})
 
 
-def _location() -> Location:
-    return Location(
-        id="osm:node:1",
-        name="Stored",
-        address="Moscow",
-        coordinates=Coordinates(latitude=55.4087, longitude=37.9094),
-        source="osm",
-        source_id="node:1",
+def make_state(user_id: int = 42) -> FSMContext:
+    return FSMContext(
+        storage=MemoryStorage(),
+        key=StorageKey(bot_id=0, chat_id=user_id, user_id=user_id),
     )
 
 
-async def test_cancel_resets_add_flow_and_returns_main_menu() -> None:
-    selection_store = InMemoryLocationSelectionStore()
-    selection_store.save(user_id=42, locations=[_location()])
-    add_location_flow = InMemoryAddLocationFlowStore()
-    add_location_flow.start(user_id=42)
+async def test_start_shows_the_main_menu() -> None:
     message = FakeMessage()
 
-    await handle_cancel(
-        message,
-        selection_store=selection_store,
-        add_location_flow=add_location_flow,
-    )
+    await handle_start(message, make_state())
 
-    assert add_location_flow.is_waiting(user_id=42) is False
-    assert selection_store.get(user_id=42, index=0) is None
-    assert "bekor qilindi" in str(message.answers[0]["text"]).lower()
+    labels = [
+        button.text
+        for row in message.answers[0]["reply_markup"].keyboard
+        for button in row
+    ]
+    assert "🔎 Qidirish" in labels
+
+
+async def test_start_drops_a_half_finished_flow() -> None:
+    # /start is the way out of a stuck wizard. Leaving the old state behind
+    # would send the next message back into the middle of the add-place flow.
+    message = FakeMessage()
+    state = make_state()
+    await state.set_state(AddPlace.location)
+    await state.update_data(name="Газпром")
+
+    await handle_start(message, state)
+
+    assert await state.get_state() is None
+    assert await state.get_data() == {}
+
+
+async def test_cancel_clears_any_pending_flow() -> None:
+    message = FakeMessage()
+    state = make_state()
+    await state.set_state(AddPlace.note)
+    await state.update_data(name="Газпром")
+
+    await handle_cancel(message, state)
+
+    assert await state.get_state() is None
+    assert await state.get_data() == {}
+    assert "bekor" in str(message.answers[0]["text"]).lower()
+
+
+async def test_cancel_returns_the_main_menu() -> None:
+    message = FakeMessage()
+
+    await handle_cancel(message, make_state())
+
     assert message.answers[0]["reply_markup"].keyboard[0][0].text == "🔎 Qidirish"

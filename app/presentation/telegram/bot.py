@@ -1,51 +1,39 @@
 from aiogram import Bot, Dispatcher
 
-from app.application.use_cases.saved_places import (
-    AddSavedPlaceUseCase,
-    DeleteSavedPlaceUseCase,
-    ListSavedPlacesUseCase,
-    UpdateSavedPlaceCategoryUseCase,
+from app.application.use_cases.places import (
+    AddPlaceUseCase,
+    DeletePlaceUseCase,
+    FindPlacesUseCase,
+    GetPlaceUseCase,
+    ListMyPlacesUseCase,
+    NearbyPlacesUseCase,
+    UpdatePlaceUseCase,
 )
-from app.application.use_cases.nearby_places import NearbyPlacesUseCase
-from app.application.use_cases.search_location import SearchLocationUseCase
 from app.config.settings import Settings
-from app.domain.interfaces.saved_places import SavedPlaceRepository
-from app.infrastructure.database.sqlite_saved_places import SQLiteSavedPlaceRepository
-from app.infrastructure.providers.osm.nominatim import NominatimGeocodingProvider
-from app.infrastructure.providers.osm.overpass import OverpassPlacesProvider
-from app.presentation.telegram.handlers import location, saved_places, search, start
+from app.domain.interfaces.community_places import PlaceRepository
+from app.infrastructure.database.sqlite_places import SQLitePlaceRepository
+from app.presentation.telegram.handlers import add_place, find_place, my_places, start
 from app.presentation.telegram.handlers import settings as settings_handlers
-from app.presentation.telegram.selection_store import (
-    InMemoryAddLocationFlowStore,
-    InMemoryLocationSelectionStore,
-    InMemoryUserSettingsStore,
-)
+from app.presentation.telegram.selection_store import InMemoryUserSettingsStore
 
 
-def create_dispatcher(
-    search_location: SearchLocationUseCase,
-    nearby_places: NearbyPlacesUseCase | None = None,
-    saved_places_repository: SavedPlaceRepository | None = None,
-) -> Dispatcher:
-    repository = saved_places_repository or SQLiteSavedPlaceRepository("data/find_location.sqlite3")
-    nearby_places_use_case = nearby_places or NearbyPlacesUseCase(OverpassPlacesProvider())
+def create_dispatcher(repository: PlaceRepository) -> Dispatcher:
     dispatcher = Dispatcher(
-        search_location=search_location,
-        nearby_places=nearby_places_use_case,
-        selection_store=InMemoryLocationSelectionStore(),
-        add_location_flow=InMemoryAddLocationFlowStore(),
+        add_place=AddPlaceUseCase(repository),
+        find_places=FindPlacesUseCase(repository),
+        nearby_places=NearbyPlacesUseCase(repository),
+        get_place=GetPlaceUseCase(repository),
+        list_my_places=ListMyPlacesUseCase(repository),
+        update_place=UpdatePlaceUseCase(repository),
+        delete_place=DeletePlaceUseCase(repository),
         user_settings=InMemoryUserSettingsStore(),
-        add_saved_place=AddSavedPlaceUseCase(repository),
-        list_saved_places=ListSavedPlacesUseCase(repository),
-        update_saved_place_category=UpdateSavedPlaceCategoryUseCase(repository),
-        delete_saved_place=DeleteSavedPlaceUseCase(repository),
     )
     dispatcher.include_router(start.router)
     dispatcher.include_router(settings_handlers.router)
-    dispatcher.include_router(saved_places.router)
-    dispatcher.include_router(location.router)
-    # search last: it owns the catch-all F.text handler
-    dispatcher.include_router(search.router)
+    dispatcher.include_router(add_place.router)
+    dispatcher.include_router(my_places.router)
+    # find_place last: it owns the bare-text catch-all handler.
+    dispatcher.include_router(find_place.router)
     return dispatcher
 
 
@@ -55,19 +43,5 @@ def create_bot(settings: Settings) -> Bot:
     return Bot(token=settings.telegram_bot_token)
 
 
-def create_geocoding_provider(settings: Settings) -> NominatimGeocodingProvider:
-    return NominatimGeocodingProvider(
-        base_url=settings.nominatim_base_url,
-        user_agent=settings.nominatim_user_agent,
-    )
-
-
-def create_places_provider(settings: Settings) -> OverpassPlacesProvider:
-    return OverpassPlacesProvider(
-        base_url=settings.overpass_base_url,
-        user_agent=settings.nominatim_user_agent,
-    )
-
-
-def create_saved_place_repository(settings: Settings) -> SavedPlaceRepository:
-    return SQLiteSavedPlaceRepository(settings.database_path)
+def create_place_repository(settings: Settings) -> PlaceRepository:
+    return SQLitePlaceRepository(settings.database_path)

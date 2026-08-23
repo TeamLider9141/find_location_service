@@ -3,15 +3,38 @@ from pathlib import Path
 from app.config.settings import Settings, get_settings
 
 
-def test_settings_loads_values_from_dotenv_file(tmp_path: Path) -> None:
+def test_settings_read_the_token_and_database_path_from_env() -> None:
+    settings = Settings.from_sources(
+        env={"TELEGRAM_BOT_TOKEN": "abc", "DATABASE_PATH": "/tmp/places.sqlite3"},
+        dotenv_path=None,
+    )
+
+    assert settings.telegram_bot_token == "abc"
+    assert settings.database_path == "/tmp/places.sqlite3"
+
+
+def test_database_path_has_a_default() -> None:
+    settings = Settings.from_sources(env={}, dotenv_path=None)
+
+    assert settings.database_path == "data/find_location.sqlite3"
+    assert settings.telegram_bot_token is None
+
+
+def test_settings_have_no_provider_configuration() -> None:
+    settings = Settings.from_sources(env={}, dotenv_path=None)
+
+    assert not hasattr(settings, "nominatim_base_url")
+    assert not hasattr(settings, "overpass_base_url")
+
+
+def test_settings_load_values_from_a_dotenv_file(tmp_path: Path) -> None:
     env_file = tmp_path / ".env"
     env_file.write_text(
         "\n".join(
             [
-                "TELEGRAM_BOT_TOKEN=123456:telegram-token",
-                "NOMINATIM_BASE_URL=https://example.test",
-                "OVERPASS_BASE_URL=https://overpass.example.test/api",
-                'NOMINATIM_USER_AGENT="driver-map-bot/0.1"',
+                "# bot",
+                'TELEGRAM_BOT_TOKEN="123456:telegram-token"',
+                "export DATABASE_PATH = /srv/places.sqlite3",
             ]
         ),
         encoding="utf-8",
@@ -19,25 +42,31 @@ def test_settings_loads_values_from_dotenv_file(tmp_path: Path) -> None:
 
     settings = Settings.from_sources(env={}, dotenv_path=env_file)
 
+    # Quotes, comments and `export` are what a hand-written .env actually looks
+    # like; a token read with its quotes still attached fails at Telegram.
     assert settings.telegram_bot_token == "123456:telegram-token"
-    assert settings.nominatim_base_url == "https://example.test"
-    assert settings.overpass_base_url == "https://overpass.example.test/api"
-    assert settings.nominatim_user_agent == "driver-map-bot/0.1"
+    assert settings.database_path == "/srv/places.sqlite3"
 
 
-def test_environment_values_override_dotenv_file(tmp_path: Path) -> None:
-    env_file = tmp_path / ".env"
-    env_file.write_text("TELEGRAM_BOT_TOKEN=from-dotenv", encoding="utf-8")
+def test_env_overrides_dotenv(tmp_path: Path) -> None:
+    dotenv = tmp_path / ".env"
+    dotenv.write_text("TELEGRAM_BOT_TOKEN=from-file\n", encoding="utf-8")
 
     settings = Settings.from_sources(
-        env={"TELEGRAM_BOT_TOKEN": "from-environment"},
-        dotenv_path=env_file,
+        env={"TELEGRAM_BOT_TOKEN": "from-env"},
+        dotenv_path=dotenv,
     )
 
-    assert settings.telegram_bot_token == "from-environment"
+    assert settings.telegram_bot_token == "from-env"
 
 
-def test_get_settings_reads_project_dotenv_by_default(tmp_path: Path) -> None:
+def test_a_missing_dotenv_file_is_not_an_error(tmp_path: Path) -> None:
+    settings = Settings.from_sources(env={}, dotenv_path=tmp_path / "absent.env")
+
+    assert settings.telegram_bot_token is None
+
+
+def test_get_settings_reads_the_dotenv_it_is_given(tmp_path: Path) -> None:
     env_file = tmp_path / ".env"
     env_file.write_text("TELEGRAM_BOT_TOKEN=from-default-dotenv", encoding="utf-8")
 
