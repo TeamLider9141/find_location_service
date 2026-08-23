@@ -1,4 +1,6 @@
-from datetime import datetime
+from datetime import datetime, timezone
+
+import pytest
 
 from app.domain.entities.community_place import Place
 from app.domain.value_objects.category import PlaceCategory
@@ -94,6 +96,12 @@ def test_update_by_the_author_changes_the_name() -> None:
 
     assert updated is not None
     assert updated.name == "Лукойл"
+    # Re-read, not just the return value: a double that returned an updated
+    # Place without storing it would look right to every caller that never
+    # looks the place up again.
+    reread = repository.get(stored.id)
+    assert reread is not None
+    assert reread.name == "Лукойл"
 
 
 def test_update_with_an_empty_note_clears_it() -> None:
@@ -190,3 +198,58 @@ def test_update_writes_a_blank_name_rather_than_ignoring_it() -> None:
 
     assert updated is not None
     assert updated.name == ""
+
+
+def test_delete_by_the_author_actually_removes_the_place() -> None:
+    # The refusal path was covered, the success path only by its return value.
+    repository = InMemoryPlaceRepository()
+    stored = repository.add(make_place(user_id=42))
+
+    assert repository.delete(stored.id, user_id=42) is True
+    assert repository.get(stored.id) is None
+
+
+def test_add_stamps_naive_utc_to_the_second() -> None:
+    # CURRENT_TIMESTAMP is naive UTC with one-second resolution. Local time or
+    # kept microseconds would both drift away from what SQLite writes.
+    repository = InMemoryPlaceRepository()
+
+    stored = repository.add(make_place())
+
+    assert stored.created_at.microsecond == 0
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    assert abs((now - stored.created_at).total_seconds()) < 5
+
+
+def test_search_rejects_a_non_enum_category_even_when_empty() -> None:
+    # The real repository reads category.value before it queries, so it raises
+    # whether or not anything would have matched.
+    repository = InMemoryPlaceRepository()
+
+    with pytest.raises(AttributeError):
+        repository.search(category="fuel")  # type: ignore[arg-type]
+
+
+def test_nearby_rejects_a_non_enum_category_even_when_empty() -> None:
+    repository = InMemoryPlaceRepository()
+
+    with pytest.raises(AttributeError):
+        repository.nearby(
+            Coordinates(latitude=55.75, longitude=37.61),
+            radius_meters=5_000,
+            category="fuel",  # type: ignore[arg-type]
+        )
+
+
+def test_update_rejects_a_non_enum_category_rather_than_storing_it() -> None:
+    # Storing the raw string would leave a Place whose category is not a
+    # PlaceCategory, poisoning every later read of that place.
+    repository = InMemoryPlaceRepository()
+    stored = repository.add(make_place(category=PlaceCategory.FUEL, user_id=42))
+
+    with pytest.raises(AttributeError):
+        repository.update(stored.id, user_id=42, category="cafe")  # type: ignore[arg-type]
+
+    unchanged = repository.get(stored.id)
+    assert unchanged is not None
+    assert unchanged.category is PlaceCategory.FUEL

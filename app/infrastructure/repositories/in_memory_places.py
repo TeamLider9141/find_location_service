@@ -38,11 +38,15 @@ class InMemoryPlaceRepository:
         limit: int = 10,
     ) -> list[Place]:
         normalized_name = normalize_name(name) if name is not None else ""
+        # Read category.value up front rather than inside the comprehension. The
+        # real repository builds its parameters before it queries, so a non-enum
+        # category raises there even when nothing would have matched anyway.
+        category_value = _category_value(category)
         matches = [
             place
             for place in self._places.values()
             if (not normalized_name or normalized_name in normalize_name(place.name))
-            and (category is None or place.category.value == category.value)
+            and (category_value is None or place.category.value == category_value)
         ]
         matches.sort(key=lambda place: place.name)
         # SQLite reads a negative LIMIT as "no limit", and a double that quietly
@@ -56,10 +60,11 @@ class InMemoryPlaceRepository:
         category: PlaceCategory | None = None,
         limit: int = 10,
     ) -> list[Place]:
+        category_value = _category_value(category)
         with_distance = [
             (coordinates.distance_to(place.coordinates), place)
             for place in self._places.values()
-            if category is None or place.category.value == category.value
+            if category_value is None or place.category.value == category_value
         ]
         within = [item for item in with_distance if item[0] <= radius_meters]
         within.sort(key=lambda item: item[0])
@@ -102,6 +107,12 @@ class InMemoryPlaceRepository:
         category: PlaceCategory | None = None,
         note: str | None = None,
     ) -> Place | None:
+        # The real repository reads category.value while building its UPDATE, so
+        # it rejects a non-enum before it ever looks at ownership. Storing the
+        # raw value instead would leave a Place whose category is not a
+        # PlaceCategory, and every later read of that place would carry it.
+        _category_value(category)
+
         place = self._places.get(place_id)
         if place is None or place.added_by_user_id != user_id:
             return None
@@ -122,6 +133,10 @@ class InMemoryPlaceRepository:
 
         del self._places[place_id]
         return True
+
+
+def _category_value(category: PlaceCategory | None) -> str | None:
+    return None if category is None else category.value
 
 
 def _names_overlap(left: str, right: str) -> bool:
