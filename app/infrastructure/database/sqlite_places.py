@@ -1,5 +1,7 @@
 import sqlite3
+from dataclasses import dataclass
 from datetime import datetime
+from math import cos, radians
 from pathlib import Path
 from sqlite3 import Row
 
@@ -11,6 +13,8 @@ from app.domain.value_objects.coordinates import Coordinates
 _COLUMNS = """
     id, added_by_user_id, name, category, latitude, longitude, note, created_at
 """
+
+_METERS_PER_LATITUDE_DEGREE = 111_320
 
 
 class SQLitePlaceRepository:
@@ -85,6 +89,43 @@ class SQLitePlaceRepository:
 
         return [_map_row(row) for row in rows]
 
+    def nearby(
+        self,
+        coordinates: Coordinates,
+        radius_meters: int,
+        category: PlaceCategory | None = None,
+        limit: int = 10,
+    ) -> list[Place]:
+        box = _bounding_box(coordinates, radius_meters)
+        conditions = [
+            "latitude BETWEEN ? AND ?",
+            "longitude BETWEEN ? AND ?",
+        ]
+        parameters: list[object] = [
+            box.min_latitude,
+            box.max_latitude,
+            box.min_longitude,
+            box.max_longitude,
+        ]
+
+        if category is not None:
+            conditions.append("category = ?")
+            parameters.append(category.value)
+
+        with self._connect() as connection:
+            rows = connection.execute(
+                f"SELECT {_COLUMNS} FROM places WHERE {' AND '.join(conditions)}",
+                parameters,
+            ).fetchall()
+
+        within_radius = [
+            (coordinates.distance_to(place.coordinates), place)
+            for place in (_map_row(row) for row in rows)
+        ]
+        within_radius = [item for item in within_radius if item[0] <= radius_meters]
+        within_radius.sort(key=lambda item: item[0])
+        return [place for _, place in within_radius[:limit]]
+
     def _initialize(self) -> None:
         with self._connect() as connection:
             connection.execute(
@@ -125,6 +166,33 @@ class SQLitePlaceRepository:
 def _escape_like(value: str) -> str:
     """Neutralize LIKE wildcards so a name containing % or _ still matches literally."""
     return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
+@dataclass(frozen=True)
+class _BoundingBox:
+    min_latitude: float
+    max_latitude: float
+    min_longitude: float
+    max_longitude: float
+
+
+def _bounding_box(coordinates: Coordinates, radius_meters: int) -> _BoundingBox:
+    """A square that certainly contains the radius circle.
+
+    Cheap prefilter only — the exact Haversine check happens in Python. Longitude
+    degrees shrink towards the poles, so the span is divided by cos(latitude);
+    near the poles that blows up, hence the clamp.
+    """
+    latitude_delta = radius_meters / _METERS_PER_LATITUDE_DEGREE
+    latitude_scale = max(cos(radians(coordinates.latitude)), 0.01)
+    longitude_delta = radius_meters / (_METERS_PER_LATITUDE_DEGREE * latitude_scale)
+
+    return _BoundingBox(
+        min_latitude=max(coordinates.latitude - latitude_delta, -90.0),
+        max_latitude=min(coordinates.latitude + latitude_delta, 90.0),
+        min_longitude=max(coordinates.longitude - longitude_delta, -180.0),
+        max_longitude=min(coordinates.longitude + longitude_delta, 180.0),
+    )
 
 
 def _map_row(row: Row) -> Place:

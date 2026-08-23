@@ -122,3 +122,61 @@ def test_search_by_blank_name_is_treated_as_no_name_filter(
     repository.add(make_place(name="Газпром"))
 
     assert len(repository.search(name="   ")) == 1
+
+
+def test_nearby_excludes_places_outside_the_radius(
+    repository: SQLitePlaceRepository,
+) -> None:
+    # ~1.1 km north of the origin.
+    repository.add(make_place(name="Близко", latitude=55.7600, longitude=37.6100))
+    # ~11 km north of the origin.
+    repository.add(make_place(name="Далеко", latitude=55.8500, longitude=37.6100))
+
+    results = repository.nearby(
+        Coordinates(latitude=55.7500, longitude=37.6100),
+        radius_meters=5_000,
+    )
+
+    assert [place.name for place in results] == ["Близко"]
+
+
+def test_nearby_sorts_by_distance(repository: SQLitePlaceRepository) -> None:
+    repository.add(make_place(name="Дальше", latitude=55.7700, longitude=37.6100))
+    repository.add(make_place(name="Ближе", latitude=55.7510, longitude=37.6100))
+
+    results = repository.nearby(
+        Coordinates(latitude=55.7500, longitude=37.6100),
+        radius_meters=5_000,
+    )
+
+    assert [place.name for place in results] == ["Ближе", "Дальше"]
+
+
+def test_nearby_can_filter_by_category(repository: SQLitePlaceRepository) -> None:
+    repository.add(
+        make_place(name="Заправка", latitude=55.7510, category=PlaceCategory.FUEL)
+    )
+    repository.add(
+        make_place(name="Кафе", latitude=55.7511, category=PlaceCategory.CAFE)
+    )
+
+    results = repository.nearby(
+        Coordinates(latitude=55.7500, longitude=37.6100),
+        radius_meters=5_000,
+        category=PlaceCategory.CAFE,
+    )
+
+    assert [place.name for place in results] == ["Кафе"]
+
+
+def test_nearby_respects_limit(repository: SQLitePlaceRepository) -> None:
+    for index in range(5):
+        repository.add(make_place(name=f"Место {index}", latitude=55.7500 + index / 1000))
+
+    results = repository.nearby(
+        Coordinates(latitude=55.7500, longitude=37.6100),
+        radius_meters=5_000,
+        limit=2,
+    )
+
+    assert len(results) == 2
