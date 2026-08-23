@@ -1518,10 +1518,13 @@ class InMemoryPlaceRepository:
         self._next_id = 1
 
     def add(self, place: Place) -> Place:
+        # The real repository leaves created_at out of its INSERT, so the column
+        # takes CURRENT_TIMESTAMP and whatever the caller passed is discarded.
+        # CURRENT_TIMESTAMP is naive UTC with one-second resolution.
         stored = replace(
             place,
             id=self._next_id,
-            created_at=place.created_at or datetime.now(timezone.utc),
+            created_at=datetime.now(timezone.utc).replace(microsecond=0, tzinfo=None),
         )
         self._places[stored.id] = stored
         self._next_id += 1
@@ -1541,10 +1544,12 @@ class InMemoryPlaceRepository:
             place
             for place in self._places.values()
             if (not normalized_name or normalized_name in normalize_name(place.name))
-            and (category is None or place.category is category)
+            and (category is None or place.category.value == category.value)
         ]
         matches.sort(key=lambda place: place.name)
-        return matches[:limit]
+        # SQLite reads a negative LIMIT as "no limit", and a double that quietly
+        # truncated instead would hide the difference from the use case tests.
+        return matches if limit < 0 else matches[:limit]
 
     def nearby(
         self,
@@ -1556,11 +1561,11 @@ class InMemoryPlaceRepository:
         with_distance = [
             (coordinates.distance_to(place.coordinates), place)
             for place in self._places.values()
-            if category is None or place.category is category
+            if category is None or place.category.value == category.value
         ]
         within = [item for item in with_distance if item[0] <= radius_meters]
         within.sort(key=lambda item: item[0])
-        return [place for _, place in within[:limit]]
+        return [place for _, place in within[: max(limit, 0)]]
 
     def list_by_author(self, user_id: int) -> list[Place]:
         matches = [
@@ -1633,8 +1638,8 @@ Expected: PASS (5 passed)
 - [ ] **Step 5: Run the whole suite**
 
 Run: `python -m pytest -q`
-Expected: **134 passed, 1 skipped** (129 after Task 10 plus the 5 above). The old bot is
-untouched.
+Expected: **143 passed, 1 skipped** (129 after Task 10, plus the 5 above and the 9 that
+land with the follow-up fix). The old bot is untouched.
 
 - [ ] **Step 6: Commit**
 
@@ -2061,7 +2066,7 @@ Expected: PASS (12 passed)
 - [ ] **Step 5: Run the whole suite**
 
 Run: `python -m pytest -q`
-Expected: **146 passed, 1 skipped** (134 after Task 11, plus 6 from Task 12 and the 6 above)
+Expected: **155 passed, 1 skipped** (143 after Task 11, plus 6 from Task 12 and the 6 above)
 
 - [ ] **Step 6: Commit**
 
