@@ -43,6 +43,9 @@ class AddPlaceUseCase:
         coordinates: Coordinates,
         radius_meters: int = DEFAULT_DUPLICATE_RADIUS_METERS,
     ) -> list[Place]:
+        # The strip here changes nothing on its own — normalize_name strips and
+        # collapses whitespace before the repository compares anything. It stays
+        # so that every name entering a use case is cleaned the same way.
         return self._repository.find_duplicates(
             name=name.strip(),
             coordinates=coordinates,

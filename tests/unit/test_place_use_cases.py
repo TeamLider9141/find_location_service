@@ -119,3 +119,36 @@ def test_nearby_places_returns_closest_first() -> None:
     )
 
     assert [place.name for place in results] == ["Ближе", "Дальше"]
+
+
+def test_add_place_trims_the_note() -> None:
+    # The note is stored verbatim — nothing normalizes it later — so the use
+    # case is the only place that can strip what the driver typed.
+    repository = InMemoryPlaceRepository()
+    use_case = AddPlaceUseCase(repository)
+
+    place = use_case.execute(
+        user_id=42,
+        name="Газпром",
+        category=PlaceCategory.FUEL,
+        coordinates=Coordinates(latitude=55.75, longitude=37.61),
+        note="  M5, 120 км  ",
+    )
+
+    assert place.note == "M5, 120 км"
+
+
+def test_add_place_trims_the_name_before_storing_it() -> None:
+    # The stored name is what the driver sees in a result list, so the padding
+    # has to go even though the search key would have ignored it.
+    repository = InMemoryPlaceRepository()
+    use_case = AddPlaceUseCase(repository)
+
+    place = use_case.execute(
+        user_id=42,
+        name="  Газпром  ",
+        category=PlaceCategory.FUEL,
+        coordinates=Coordinates(latitude=55.75, longitude=37.61),
+    )
+
+    assert place.name == "Газпром"
