@@ -1638,8 +1638,10 @@ Expected: PASS (5 passed)
 - [ ] **Step 5: Run the whole suite**
 
 Run: `python -m pytest -q`
-Expected: **143 passed, 1 skipped** (129 after Task 10, plus the 5 above and the 9 that
-land with the follow-up fix). The old bot is untouched.
+Expected: **149 passed, 1 skipped** (129 after Task 10, plus the 5 above, the 9 that land
+with the follow-up fix, and the 6 from the review round that pin the blank-name update,
+persistence after update and delete, the naive-UTC stamp, and the three non-enum category
+paths). The old bot is untouched.
 
 - [ ] **Step 6: Commit**
 
@@ -2066,7 +2068,7 @@ Expected: PASS (12 passed)
 - [ ] **Step 5: Run the whole suite**
 
 Run: `python -m pytest -q`
-Expected: **155 passed, 1 skipped** (143 after Task 11, plus 6 from Task 12 and the 6 above)
+Expected: **161 passed, 1 skipped** (149 after Task 11, plus 6 from Task 12 and the 6 above)
 
 - [ ] **Step 6: Commit**
 
@@ -2201,8 +2203,8 @@ SAVED_LOCATIONS_BUTTON = MY_PLACES_BUTTON
 - [ ] **Step 7: Run the whole suite**
 
 Run: `python -m pytest -q`
-Expected: **131 passed, 1 skipped** (the keyboard file went from 2 tests to 3, and the old
-`test_saved_place_keyboards.py` still passes)
+Expected: **162 passed, 1 skipped** (161 after Task 13; the keyboard file went from 2 tests
+to 3, and the old `test_saved_place_keyboards.py` still passes)
 
 If a test still fails because it asserted the old three-row layout, update that assertion
 to match the new labels — do not restore the old layout.
