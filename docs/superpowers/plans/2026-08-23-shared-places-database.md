@@ -1581,10 +1581,14 @@ class InMemoryPlaceRepository:
         if not normalized_name:
             return []
 
+        # The stored side needs the same emptiness guard as the incoming one:
+        # every string contains the empty string, so one place with a blank name
+        # would otherwise be reported as a duplicate of everything near it.
         return [
             place
             for place in self.nearby(coordinates, radius_meters, limit=50)
-            if _names_overlap(normalized_name, normalize_name(place.name))
+            if (stored_name := normalize_name(place.name))
+            and _names_overlap(normalized_name, stored_name)
         ]
 
     def update(
