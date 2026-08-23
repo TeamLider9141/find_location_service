@@ -33,15 +33,16 @@ def _saved_place(saved_place_id: int, name: str) -> SavedPlace:
 def test_main_menu_keyboard_contains_add_and_saved_locations_buttons() -> None:
     keyboard = build_main_menu_keyboard()
 
-    assert SEARCH_LOCATION_BUTTON == "🔎 Manzil qidirish"
-    assert ADD_LOCATION_BUTTON == "➕ Manzil qo'shish"
-    assert SAVED_LOCATIONS_BUTTON == "📍 Saqlangan manzillar"
+    # The old handlers still import these names, so they have to keep pointing
+    # at real menu buttons until Task 24 removes them.
+    assert SEARCH_LOCATION_BUTTON == "🔎 Qidirish"
+    assert ADD_LOCATION_BUTTON == "➕ Joy qo'shish"
+    assert SAVED_LOCATIONS_BUTTON == "📒 Mening joylarim"
     assert CANCEL_BUTTON == "/cancel"
-    assert keyboard.keyboard[0][0].text == "🔎 Manzil qidirish"
+    assert keyboard.keyboard[0][0].text == "🔎 Qidirish"
     assert len(keyboard.keyboard[0]) == 1
-    assert keyboard.keyboard[1][0].text == "➕ Manzil qo'shish"
-    assert keyboard.keyboard[1][1].text == "📍 Saqlangan manzillar"
-    assert keyboard.keyboard[2][0].text == "/cancel"
+    assert keyboard.keyboard[1][1].text == "➕ Joy qo'shish"
+    assert keyboard.keyboard[2][0].text == "📒 Mening joylarim"
 
 
 def test_add_category_keyboard_keeps_selected_location_index_in_callback_data() -> None:

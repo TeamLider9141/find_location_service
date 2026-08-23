@@ -1,48 +1,35 @@
-from app.domain.entities.location import Location
-from app.domain.value_objects.category import PlaceCategory
-from app.domain.value_objects.coordinates import Coordinates
-from app.presentation.telegram.keyboards.locations import (
-    build_locations_keyboard,
-    build_realtime_nearby_categories_keyboard,
-    build_selected_location_actions_keyboard,
+from app.presentation.telegram.keyboards.menu import (
+    ADD_PLACE_BUTTON,
+    CANCEL_BUTTON,
+    MY_PLACES_BUTTON,
+    NEARBY_BUTTON,
+    SEARCH_BUTTON,
+    SETTINGS_BUTTON,
+    build_main_menu_keyboard,
 )
 
 
-def _location(name: str) -> Location:
-    return Location(
-        id=f"osm:node:{name}",
-        name=name,
-        address="Московская область",
-        coordinates=Coordinates(latitude=55.4087, longitude=37.9094),
-        source="osm",
-        source_id=f"node:{name}",
-    )
+def test_main_menu_offers_every_entry_point() -> None:
+    keyboard = build_main_menu_keyboard()
+
+    labels = [button.text for row in keyboard.keyboard for button in row]
+
+    assert labels == [
+        SEARCH_BUTTON,
+        NEARBY_BUTTON,
+        ADD_PLACE_BUTTON,
+        MY_PLACES_BUTTON,
+        SETTINGS_BUTTON,
+    ]
 
 
-def test_locations_keyboard_uses_stable_index_callback_data() -> None:
-    keyboard = build_locations_keyboard([_location("Аэропорт Домодедово"), _location("Домодедово")])
-
-    assert keyboard.inline_keyboard[0][0].text == "1. Аэропорт Домодедово"
-    assert keyboard.inline_keyboard[0][0].callback_data == "location:0"
-    assert keyboard.inline_keyboard[1][0].text == "2. Домодедово"
-    assert keyboard.inline_keyboard[1][0].callback_data == "location:1"
+def test_main_menu_resizes() -> None:
+    assert build_main_menu_keyboard().resize_keyboard is True
 
 
-def test_selected_location_actions_include_nearby_category_buttons() -> None:
-    keyboard = build_selected_location_actions_keyboard(location_index=2)
+def test_cancel_is_a_command_not_a_menu_button() -> None:
+    labels = [
+        button.text for row in build_main_menu_keyboard().keyboard for button in row
+    ]
 
-    callback_data = [row[0].callback_data for row in keyboard.inline_keyboard]
-
-    assert "add_location:2" in callback_data
-    assert f"nearby:2:{PlaceCategory.FUEL.value}" in callback_data
-    assert f"nearby:2:{PlaceCategory.HOTEL.value}" in callback_data
-    assert "nearby_realtime:start" in callback_data
-
-
-def test_realtime_nearby_categories_keyboard_asks_for_category_first() -> None:
-    keyboard = build_realtime_nearby_categories_keyboard()
-
-    callback_data = [row[0].callback_data for row in keyboard.inline_keyboard]
-
-    assert f"nearby_realtime:{PlaceCategory.RESTAURANT.value}" in callback_data
-    assert f"nearby_realtime:{PlaceCategory.CAR_SERVICE.value}" in callback_data
+    assert CANCEL_BUTTON not in labels

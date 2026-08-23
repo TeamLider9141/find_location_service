@@ -48,4 +48,4 @@ async def test_cancel_resets_add_flow_and_returns_main_menu() -> None:
     assert add_location_flow.is_waiting(user_id=42) is False
     assert selection_store.get(user_id=42, index=0) is None
     assert "bekor qilindi" in str(message.answers[0]["text"]).lower()
-    assert message.answers[0]["reply_markup"].keyboard[0][0].text == "🔎 Manzil qidirish"
+    assert message.answers[0]["reply_markup"].keyboard[0][0].text == "🔎 Qidirish"
