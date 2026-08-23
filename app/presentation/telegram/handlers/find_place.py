@@ -2,7 +2,6 @@ import sqlite3
 from typing import Protocol
 
 from aiogram import F, Router
-from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
@@ -50,7 +49,6 @@ NOT_A_LOCATION_MESSAGE = (
 INVALID_SELECTION_MESSAGE = "Tanlov eskirgan. Qayta qidirib ko'ring."
 PLACE_GONE_MESSAGE = "Bu joy o'chirilgan."
 DATABASE_ERROR_MESSAGE = "Baza bilan muammo. Birozdan so'ng urinib ko'ring."
-NEARBY_CANCELLED_MESSAGE = "Bekor qilindi. Boshlang'ich menyuga qaytdingiz."
 
 
 class UserSettingsStore(Protocol):
@@ -100,15 +98,6 @@ async def handle_category_browse(
 async def handle_nearby_start(message: Message, state: FSMContext) -> None:
     await state.set_state(NearbyPlace.location)
     await message.answer(ASK_NEARBY_LOCATION_MESSAGE)
-
-
-@router.message(NearbyPlace.location, Command("cancel"))
-async def handle_nearby_cancel(message: Message, state: FSMContext) -> None:
-    await state.clear()
-    await message.answer(
-        NEARBY_CANCELLED_MESSAGE,
-        reply_markup=build_main_menu_keyboard(),
-    )
 
 
 @router.message(NearbyPlace.location)

@@ -10,7 +10,6 @@ from app.domain.value_objects.coordinates import Coordinates
 from app.infrastructure.repositories.in_memory_places import InMemoryPlaceRepository
 from app.presentation.telegram.handlers.add_place import (
     handle_add_place_start,
-    handle_cancel,
     handle_category,
     handle_duplicate_answer,
     handle_location,
@@ -18,6 +17,7 @@ from app.presentation.telegram.handlers.add_place import (
     handle_note,
     handle_skip_note,
 )
+from app.presentation.telegram.handlers.start import handle_cancel as handle_global_cancel
 from app.presentation.telegram.states import AddPlace
 
 
@@ -537,13 +537,16 @@ async def test_a_duplicate_answer_on_an_expired_message_clears_the_flow() -> Non
     assert callback.alerts[0] is not None
 
 
+# /cancel is answered by the start router, which is included first and matches
+# in any state, so that is the handler these tests drive — a per-flow one would
+# never see the command.
 async def test_cancel_clears_the_flow_at_any_step() -> None:
     state = make_state()
     await state.set_state(AddPlace.location)
     await state.update_data(name="Газпром")
     message = FakeMessage(text="/cancel")
 
-    await handle_cancel(message, state)
+    await handle_global_cancel(message, state)
 
     assert await state.get_state() is None
     assert await state.get_data() == {}
@@ -554,7 +557,7 @@ async def test_cancel_at_the_note_step_saves_nothing() -> None:
     repository = InMemoryPlaceRepository()
     state = await _state_at_note()
 
-    await handle_cancel(FakeMessage(text="/cancel"), state)
+    await handle_global_cancel(FakeMessage(text="/cancel"), state)
 
     assert repository.search() == []
     assert await state.get_data() == {}

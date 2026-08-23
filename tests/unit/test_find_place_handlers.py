@@ -17,12 +17,12 @@ from app.infrastructure.repositories.in_memory_places import InMemoryPlaceReposi
 from app.presentation.telegram.handlers.find_place import (
     handle_category_browse,
     handle_find_start,
-    handle_nearby_cancel,
     handle_nearby_location,
     handle_nearby_start,
     handle_place_card,
     handle_text_query,
 )
+from app.presentation.telegram.handlers.start import handle_cancel as handle_global_cancel
 from app.presentation.telegram.selection_store import InMemoryUserSettingsStore
 from app.presentation.telegram.states import NearbyPlace
 
@@ -378,12 +378,14 @@ async def test_a_database_failure_during_nearby_clears_the_flow() -> None:
     assert await state.get_state() is None
 
 
+# Same as in the add-place flow: /cancel belongs to the start router, which is
+# included first and matches in any state.
 async def test_nearby_cancel_returns_to_the_menu() -> None:
     state = make_state()
     await state.set_state(NearbyPlace.location)
     message = FakeMessage(text="/cancel")
 
-    await handle_nearby_cancel(message, state)
+    await handle_global_cancel(message, state)
 
     assert await state.get_state() is None
     assert message.answers[0]["reply_markup"] is not None

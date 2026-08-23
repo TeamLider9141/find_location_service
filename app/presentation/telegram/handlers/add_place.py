@@ -202,11 +202,6 @@ async def handle_note(
     await _save(message, state, add_place, note=message.text or "")
 
 
-@router.message(AddPlace(), Command("cancel"))
-async def handle_cancel(message: Message, state: FSMContext) -> None:
-    await state.clear()
-    await message.answer(CANCELLED_MESSAGE, reply_markup=build_main_menu_keyboard())
-
 
 async def _save(
     message: Message,

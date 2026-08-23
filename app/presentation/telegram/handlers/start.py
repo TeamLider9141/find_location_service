@@ -15,8 +15,9 @@ async def handle_start(message: Message, state: FSMContext) -> None:
     await message.answer(format_start_message(), reply_markup=build_main_menu_keyboard())
 
 
-# This router is included first, so /cancel is answered here whatever flow the
-# driver is in — the per-flow cancel handlers never see it.
+# The only /cancel handler. This router is included first and the filter carries
+# no state, so it answers whatever flow the driver is in; a per-flow handler
+# would sit behind both this one and its own flow's step handlers.
 @router.message(Command("cancel"))
 async def handle_cancel(message: Message, state: FSMContext) -> None:
     await state.clear()
