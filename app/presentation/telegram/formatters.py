@@ -135,3 +135,14 @@ def _format_distance(meters: float) -> str:
     if meters < 1000:
         return f"{round(meters)} m"
     return f"{meters / 1000:.1f} km"
+
+
+def format_duplicate_warning(duplicates: list[CommunityPlace]) -> str:
+    names = "\n".join(
+        f"• {place.name} — {category_label(place.category)}" for place in duplicates
+    )
+    return (
+        "⚠️ Yaqin atrofda shunga o'xshash joy bor:\n\n"
+        f"{names}\n\n"
+        "Baribir qo'shaymi?"
+    )

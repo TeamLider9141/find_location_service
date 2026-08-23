@@ -1,9 +1,18 @@
 from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
-from aiogram.types import Message
+from aiogram.types import CallbackQuery, Message
 
+from app.application.use_cases.places import AddPlaceUseCase
+from app.domain.value_objects.category import PlaceCategory
+from app.domain.value_objects.coordinates import Coordinates
+from app.presentation.telegram.errors import EXPIRED_MESSAGE, answerable_message
+from app.presentation.telegram.formatters import format_duplicate_warning
 from app.presentation.telegram.keyboards.menu import ADD_PLACE_BUTTON
-from app.presentation.telegram.keyboards.places import build_category_choice_keyboard
+from app.presentation.telegram.keyboards.places import (
+    build_category_choice_keyboard,
+    build_duplicate_confirmation_keyboard,
+)
+from app.presentation.telegram.location_input import parse_coordinates_from_text
 from app.presentation.telegram.states import AddPlace
 
 router = Router(name="add_place")
@@ -11,6 +20,19 @@ router = Router(name="add_place")
 ASK_NAME_MESSAGE = "Joy nomini yozing. Masalan: Газпром yoki Кафе У Дороги."
 ASK_CATEGORY_MESSAGE = "Kategoriyani tanlang."
 BLANK_NAME_MESSAGE = "Nom bo'sh bo'lmasligi kerak. Joy nomini yozing."
+ASK_LOCATION_MESSAGE = (
+    "Endi lokatsiyani yuboring.\n\n"
+    "📎 → Lokatsiya, yoki xarita linkini, yoki koordinatani yozing: 55.75, 37.61"
+)
+ASK_LOCATION_AGAIN_MESSAGE = (
+    "Buni lokatsiya sifatida o'qiy olmadim. "
+    "Telegram lokatsiyasini yuboring yoki koordinatani yozing: 55.75, 37.61"
+)
+ASK_NOTE_MESSAGE = (
+    "Izoh qo'shasizmi? Masalan: M5, 120-km, kechasi ochiq.\n"
+    "Kerak bo'lmasa /skip yuboring."
+)
+INVALID_CATEGORY_MESSAGE = "Bunday kategoriya yo'q. Ro'yxatdan tanlang."
 
 
 @router.message(F.text == ADD_PLACE_BUTTON)
@@ -36,3 +58,86 @@ async def handle_name(message: Message, state: FSMContext) -> None:
         ASK_CATEGORY_MESSAGE,
         reply_markup=build_category_choice_keyboard("add_place:category"),
     )
+
+
+@router.callback_query(AddPlace.category, F.data.startswith("add_place:category:"))
+async def handle_category(callback_query: CallbackQuery, state: FSMContext) -> None:
+    category = _parse_category(callback_query.data)
+    if category is None:
+        await callback_query.answer(INVALID_CATEGORY_MESSAGE)
+        return
+
+    message = answerable_message(callback_query)
+    if message is None:
+        await callback_query.answer(EXPIRED_MESSAGE)
+        return
+
+    await state.update_data(category=category.value)
+    await state.set_state(AddPlace.location)
+    await message.answer(ASK_LOCATION_MESSAGE)
+    await callback_query.answer()
+
+
+@router.message(AddPlace.location)
+async def handle_location(
+    message: Message,
+    state: FSMContext,
+    add_place: AddPlaceUseCase,
+) -> None:
+    coordinates = _coordinates_from_message(message)
+    if coordinates is None:
+        await message.answer(ASK_LOCATION_AGAIN_MESSAGE)
+        return
+
+    await state.update_data(
+        latitude=coordinates.latitude,
+        longitude=coordinates.longitude,
+    )
+
+    data = await state.get_data()
+    # Ask before the note step, not at save time: a driver who is about to
+    # re-add a place someone else already shared should find out before
+    # spending effort on it.
+    duplicates = add_place.find_duplicates(
+        name=str(data["name"]),
+        coordinates=coordinates,
+    )
+    if duplicates:
+        await state.set_state(AddPlace.duplicate)
+        await message.answer(
+            format_duplicate_warning(duplicates),
+            reply_markup=build_duplicate_confirmation_keyboard(),
+        )
+        return
+
+    await state.set_state(AddPlace.note)
+    await message.answer(ASK_NOTE_MESSAGE)
+
+
+def _parse_category(data: str | None) -> PlaceCategory | None:
+    prefix = "add_place:category:"
+    if data is None or not data.startswith(prefix):
+        return None
+    try:
+        return PlaceCategory(data.removeprefix(prefix))
+    except ValueError:
+        return None
+
+
+def _coordinates_from_message(message: Message) -> Coordinates | None:
+    location = getattr(message, "location", None)
+    if location is not None:
+        return Coordinates(latitude=location.latitude, longitude=location.longitude)
+
+    venue = getattr(message, "venue", None)
+    if venue is not None and getattr(venue, "location", None) is not None:
+        return Coordinates(
+            latitude=venue.location.latitude,
+            longitude=venue.location.longitude,
+        )
+
+    text = getattr(message, "text", None)
+    if text:
+        return parse_coordinates_from_text(text)
+
+    return None
