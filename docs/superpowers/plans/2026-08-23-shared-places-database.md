@@ -949,15 +949,28 @@ class _BoundingBox:
 
 
 def _bounding_box(coordinates: Coordinates, radius_meters: int) -> _BoundingBox:
-    """A square that certainly contains the radius circle.
+    """A rectangle that contains the radius circle, with a small safety margin.
 
-    Cheap prefilter only — the exact Haversine check happens in Python. Longitude
-    degrees shrink towards the poles, so the span is divided by cos(latitude);
-    near the poles that blows up, hence the clamp.
+    This is a cheap prefilter — the exact Haversine check runs in Python
+    afterwards — so the box may be too large but must never be too small.
+    That is why it measures on the same sphere as ``Coordinates.distance_to``:
+    a flat metres-per-degree constant comes out slightly narrower than Haversine
+    measures and silently drops places that are genuinely inside the radius.
+
+    The box does not wrap the antimeridian; a search centred near +/-180
+    longitude is clipped rather than continued on the other side. That costs
+    nothing for the drivers this bot serves.
     """
-    latitude_delta = radius_meters / _METERS_PER_LATITUDE_DEGREE
-    latitude_scale = max(cos(radians(coordinates.latitude)), 0.01)
-    longitude_delta = radius_meters / (_METERS_PER_LATITUDE_DEGREE * latitude_scale)
+    angular_radius = radius_meters * _BOX_MARGIN / _EARTH_RADIUS_METERS
+    latitude_delta = degrees(angular_radius)
+
+    # Longitude degrees shrink towards the poles, so the same distance spans
+    # more of them the further north you are. Close enough to a pole the circle
+    # covers every longitude, which is what a sine of 1 or more means.
+    longitude_sine = sin(angular_radius) / max(cos(radians(coordinates.latitude)), 1e-9)
+    longitude_delta = (
+        180.0 if longitude_sine >= 1 else degrees(asin(longitude_sine))
+    )
 
     return _BoundingBox(
         min_latitude=max(coordinates.latitude - latitude_delta, -90.0),
@@ -971,15 +984,26 @@ Add to the top of the module:
 
 ```python
 from dataclasses import dataclass
-from math import cos, radians
+from math import asin, cos, degrees, radians, sin
 
-_METERS_PER_LATITUDE_DEGREE = 111_320
+_EARTH_RADIUS_METERS = 6_371_000
+_BOX_MARGIN = 1.001
 ```
+
+`_EARTH_RADIUS_METERS` must match the sphere `Coordinates.distance_to` uses. A flat
+111_320 m per degree (the WGS84 figure) is 0.11% too large, which makes the box span
+4994 m for a 5000 m radius and silently drop places the Haversine check would have
+accepted. `_BOX_MARGIN` only absorbs floating-point noise at the boundary.
 
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `python -m pytest tests/unit/test_sqlite_place_repository.py -v`
-Expected: PASS (15 passed)
+Expected: PASS (18 passed)
+
+Three of those 18 exist to stop the box from quietly doing all the work: one place
+just inside the radius but outside a box built from a flat constant, one place inside
+the box corner but outside the radius, and two places at an identical distance so the
+`key=lambda item: item[0]` cannot be dropped without a `TypeError`.
 
 - [ ] **Step 5: Commit**
 
@@ -987,8 +1011,9 @@ Expected: PASS (15 passed)
 git add app/infrastructure/database/sqlite_places.py tests/unit/test_sqlite_place_repository.py
 git commit -m "feat(database): find places near coordinates"
 
-# Why: SQLite has no trigonometry, so a bounding box narrows the rows using
-# the lat/lon indexes and Haversine runs only on the survivors.
+# Why: SQLite has no trigonometry, so a bounding box narrows the rows before
+# Haversine runs on the survivors. The places table has no lat/lon index, so
+# that stage is a full scan — it cuts Python's work, not SQLite's.
 ```
 
 ---
