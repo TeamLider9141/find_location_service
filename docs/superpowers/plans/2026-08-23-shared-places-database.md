@@ -3244,7 +3244,12 @@ every step.
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `python -m pytest tests/unit/test_add_place_handlers.py -v`
-Expected: PASS (12 passed)
+Expected: PASS (34 passed — the 20 after Task 18 plus the 5 below and nine more:
+the saved card and its map link, the coordinates actually written, a flow missing
+its location step, a database failure, an expired duplicate message, a garbled
+duplicate answer, the data the yes branch has to keep, cancel at the note step,
+and a message with no from_user, which must save nothing rather than file the
+place under a placeholder author nobody can edit)
 
 - [ ] **Step 5: Commit**
 
