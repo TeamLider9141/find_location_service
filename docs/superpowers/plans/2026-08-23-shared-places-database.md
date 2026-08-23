@@ -2405,7 +2405,8 @@ can silently go missing from the UI — the bug that hid `CAFE` before.
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `python -m pytest tests/unit/test_place_keyboards.py -v`
-Expected: PASS (6 passed)
+Expected: PASS (10 passed — the 6 below plus button labels, the empty-result case
+and the one-button-per-row layout, none of which the callback assertions pin)
 
 - [ ] **Step 5: Commit**
 
