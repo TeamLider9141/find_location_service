@@ -88,3 +88,59 @@ class NearbyPlacesUseCase:
             category=category,
             limit=limit,
         )
+
+
+class ListMyPlacesUseCase:
+    def __init__(self, repository: PlaceRepository) -> None:
+        self._repository = repository
+
+    def execute(self, user_id: int) -> list[Place]:
+        return self._repository.list_by_author(user_id)
+
+
+class GetPlaceUseCase:
+    def __init__(self, repository: PlaceRepository) -> None:
+        self._repository = repository
+
+    def execute(self, place_id: int) -> Place | None:
+        return self._repository.get(place_id)
+
+
+class UpdatePlaceUseCase:
+    def __init__(self, repository: PlaceRepository) -> None:
+        self._repository = repository
+
+    def execute(
+        self,
+        place_id: int,
+        user_id: int,
+        name: str | None = None,
+        category: PlaceCategory | None = None,
+        note: str | None = None,
+    ) -> Place | None:
+        cleaned_name = name
+        if name is not None:
+            # Same rule as adding one: a place has to keep a name other drivers
+            # can search for. Without this a rename could blank the name, and a
+            # blank name is the one case find_duplicates has to defend against.
+            cleaned_name = name.strip()
+            if not cleaned_name:
+                raise ValueError("name must not be blank")
+
+        return self._repository.update(
+            place_id=place_id,
+            user_id=user_id,
+            name=cleaned_name,
+            category=category,
+            # A blank note is not the same as no note: "" clears the text, None
+            # leaves whatever is stored alone.
+            note=note.strip() if note is not None else None,
+        )
+
+
+class DeletePlaceUseCase:
+    def __init__(self, repository: PlaceRepository) -> None:
+        self._repository = repository
+
+    def execute(self, place_id: int, user_id: int) -> bool:
+        return self._repository.delete(place_id, user_id)

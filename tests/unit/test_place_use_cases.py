@@ -5,9 +5,14 @@ import pytest
 
 from app.application.use_cases.places import (
     AddPlaceUseCase,
+    DeletePlaceUseCase,
     FindPlacesUseCase,
+    GetPlaceUseCase,
+    ListMyPlacesUseCase,
     NearbyPlacesUseCase,
+    UpdatePlaceUseCase,
 )
+from app.domain.entities.community_place import Place
 from app.domain.value_objects.category import PlaceCategory
 from app.domain.value_objects.coordinates import Coordinates
 from app.infrastructure.repositories.in_memory_places import InMemoryPlaceRepository
@@ -260,3 +265,148 @@ def test_add_place_trims_the_name_before_storing_it() -> None:
     )
 
     assert place.name == "Газпром"
+
+
+def _seed(repository: InMemoryPlaceRepository, user_id: int = 42) -> Place:
+    return AddPlaceUseCase(repository).execute(
+        user_id=user_id,
+        name="Газпром",
+        category=PlaceCategory.FUEL,
+        coordinates=Coordinates(latitude=55.75, longitude=37.61),
+        note="кругл",
+    )
+
+
+def test_list_my_places_returns_only_my_contributions() -> None:
+    repository = InMemoryPlaceRepository()
+    _seed(repository, user_id=42)
+    _seed(repository, user_id=7)
+
+    results = ListMyPlacesUseCase(repository).execute(user_id=42)
+
+    assert [place.added_by_user_id for place in results] == [42]
+
+
+def test_get_place_returns_the_place_whoever_asks() -> None:
+    # Reading is not author-scoped: the whole point of the shared database is
+    # that another driver can open a place they did not add.
+    repository = InMemoryPlaceRepository()
+    stored = _seed(repository, user_id=42)
+
+    found = GetPlaceUseCase(repository).execute(stored.id)
+
+    assert found is not None
+    assert found.id == stored.id
+
+
+def test_get_place_returns_none_for_a_missing_id() -> None:
+    repository = InMemoryPlaceRepository()
+
+    assert GetPlaceUseCase(repository).execute(999) is None
+
+
+def test_update_place_changes_the_category() -> None:
+    repository = InMemoryPlaceRepository()
+    stored = _seed(repository)
+
+    updated = UpdatePlaceUseCase(repository).execute(
+        place_id=stored.id,
+        user_id=42,
+        category=PlaceCategory.CAFE,
+    )
+
+    assert updated is not None
+    assert updated.category is PlaceCategory.CAFE
+
+
+def test_update_place_by_another_user_returns_none() -> None:
+    repository = InMemoryPlaceRepository()
+    stored = _seed(repository)
+
+    updated = UpdatePlaceUseCase(repository).execute(
+        place_id=stored.id,
+        user_id=7,
+        category=PlaceCategory.CAFE,
+    )
+
+    assert updated is None
+    unchanged = repository.get(stored.id)
+    assert unchanged is not None
+    assert unchanged.category is PlaceCategory.FUEL
+
+
+def test_update_place_rejects_a_blank_name() -> None:
+    repository = InMemoryPlaceRepository()
+    stored = _seed(repository)
+
+    with pytest.raises(ValueError):
+        UpdatePlaceUseCase(repository).execute(
+            place_id=stored.id,
+            user_id=42,
+            name="   ",
+        )
+
+    unchanged = repository.get(stored.id)
+    assert unchanged is not None
+    assert unchanged.name == "Газпром"
+
+
+def test_update_place_trims_the_name() -> None:
+    repository = InMemoryPlaceRepository()
+    stored = _seed(repository)
+
+    updated = UpdatePlaceUseCase(repository).execute(
+        place_id=stored.id,
+        user_id=42,
+        name="  Лукойл  ",
+    )
+
+    assert updated is not None
+    assert updated.name == "Лукойл"
+
+
+def test_update_place_trims_the_note_and_can_clear_it() -> None:
+    # note="" means "remove the note", so the strip must not turn a blank note
+    # into None and leave the old text in place.
+    repository = InMemoryPlaceRepository()
+    stored = _seed(repository)
+
+    trimmed = UpdatePlaceUseCase(repository).execute(
+        place_id=stored.id, user_id=42, note="  M5, 120 км  "
+    )
+    assert trimmed is not None
+    assert trimmed.note == "M5, 120 км"
+
+    cleared = UpdatePlaceUseCase(repository).execute(
+        place_id=stored.id, user_id=42, note="   "
+    )
+    assert cleared is not None
+    assert cleared.note == ""
+
+
+def test_update_place_with_nothing_to_change_leaves_the_place_alone() -> None:
+    repository = InMemoryPlaceRepository()
+    stored = _seed(repository)
+
+    updated = UpdatePlaceUseCase(repository).execute(place_id=stored.id, user_id=42)
+
+    assert updated is not None
+    assert updated.name == "Газпром"
+    assert updated.category is PlaceCategory.FUEL
+    assert updated.note == "кругл"
+
+
+def test_delete_place_by_the_author_succeeds() -> None:
+    repository = InMemoryPlaceRepository()
+    stored = _seed(repository)
+
+    assert DeletePlaceUseCase(repository).execute(stored.id, user_id=42) is True
+    assert repository.get(stored.id) is None
+
+
+def test_delete_place_by_another_user_fails() -> None:
+    repository = InMemoryPlaceRepository()
+    stored = _seed(repository)
+
+    assert DeletePlaceUseCase(repository).execute(stored.id, user_id=7) is False
+    assert repository.get(stored.id) is not None
