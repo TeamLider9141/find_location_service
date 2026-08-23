@@ -57,3 +57,30 @@ def test_get_returns_the_place_for_any_user(repository: SQLitePlaceRepository) -
 
 def test_get_returns_none_for_unknown_id(repository: SQLitePlaceRepository) -> None:
     assert repository.get(999) is None
+
+
+def test_search_by_category_returns_only_that_category(
+    repository: SQLitePlaceRepository,
+) -> None:
+    repository.add(make_place(name="Газпром", category=PlaceCategory.FUEL))
+    repository.add(make_place(name="Придорожное", category=PlaceCategory.RESTAURANT))
+
+    results = repository.search(category=PlaceCategory.FUEL)
+
+    assert [place.name for place in results] == ["Газпром"]
+
+
+def test_search_without_filters_returns_everything(
+    repository: SQLitePlaceRepository,
+) -> None:
+    repository.add(make_place(name="Газпром"))
+    repository.add(make_place(name="Лукойл"))
+
+    assert len(repository.search()) == 2
+
+
+def test_search_respects_limit(repository: SQLitePlaceRepository) -> None:
+    for index in range(5):
+        repository.add(make_place(name=f"Газпром {index}"))
+
+    assert len(repository.search(limit=2)) == 2

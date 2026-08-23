@@ -56,6 +56,30 @@ class SQLitePlaceRepository:
 
         return _map_row(row) if row is not None else None
 
+    def search(
+        self,
+        name: str | None = None,
+        category: PlaceCategory | None = None,
+        limit: int = 10,
+    ) -> list[Place]:
+        conditions: list[str] = []
+        parameters: list[object] = []
+
+        if category is not None:
+            conditions.append("category = ?")
+            parameters.append(category.value)
+
+        where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
+        parameters.append(limit)
+
+        with self._connect() as connection:
+            rows = connection.execute(
+                f"SELECT {_COLUMNS} FROM places {where} ORDER BY name ASC LIMIT ?",
+                parameters,
+            ).fetchall()
+
+        return [_map_row(row) for row in rows]
+
     def _initialize(self) -> None:
         with self._connect() as connection:
             connection.execute(
