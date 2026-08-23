@@ -1,0 +1,106 @@
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+
+from app.domain.value_objects.category import PlaceCategory
+from app.presentation.telegram.keyboards.categories import category_label
+
+
+def build_category_choice_keyboard(prefix: str) -> InlineKeyboardMarkup:
+    """One button per category, each callback prefixed by the caller's flow."""
+    # Iterating PlaceCategory rather than editable_categories() keeps the
+    # keyboard in step with the enum: a category added to the domain shows up
+    # here without a second edit. A label table that fell behind is what hid
+    # CAFE from the UI before.
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text=category_label(category),
+                    callback_data=f"{prefix}:{category.value}",
+                )
+            ]
+            for category in PlaceCategory
+        ]
+    )
+
+
+def build_place_results_keyboard(place_ids: list[int]) -> InlineKeyboardMarkup:
+    """Buttons carry the database id, so a later search cannot shift the target."""
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text=f"{index}", callback_data=f"place:{place_id}")]
+            for index, place_id in enumerate(place_ids, start=1)
+        ]
+    )
+
+
+def build_duplicate_confirmation_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="✅ Ha, qo'sh",
+                    callback_data="add_place:duplicate:yes",
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="❌ Yo'q",
+                    callback_data="add_place:duplicate:no",
+                )
+            ],
+        ]
+    )
+
+
+def build_my_place_actions_keyboard(place_id: int) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="Kategoriyani o'zgartirish",
+                    callback_data=f"my_place:category:{place_id}",
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="O'chirish",
+                    callback_data=f"my_place:delete:{place_id}",
+                )
+            ],
+        ]
+    )
+
+
+def build_update_category_keyboard(place_id: int) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text=category_label(category),
+                    callback_data=f"my_place:set_category:{place_id}:{category.value}",
+                )
+            ]
+            for category in PlaceCategory
+        ]
+    )
+
+
+def build_place_delete_confirmation_keyboard(place_id: int) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="✅ O'chirishni tasdiqlash",
+                    callback_data=f"my_place:confirm_delete:{place_id}",
+                )
+            ],
+            # No place_id on cancel: nothing is deleted, so there is nothing to
+            # target, and a stale id here would be one more thing to validate.
+            [
+                InlineKeyboardButton(
+                    text="Bekor qilish",
+                    callback_data="my_place:cancel_delete",
+                )
+            ],
+        ]
+    )
