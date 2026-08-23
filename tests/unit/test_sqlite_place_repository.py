@@ -361,3 +361,72 @@ def test_find_duplicates_ignores_a_stored_blank_name(
     )
 
     assert duplicates == []
+
+
+def test_update_changes_the_name_and_its_search_key(
+    repository: SQLitePlaceRepository,
+) -> None:
+    stored = repository.add(make_place(name="Газпром", user_id=42))
+
+    updated = repository.update(stored.id, user_id=42, name="Лукойл")
+
+    assert updated is not None
+    assert updated.name == "Лукойл"
+    assert [place.name for place in repository.search(name="лукойл")] == ["Лукойл"]
+
+
+def test_update_changes_the_category(repository: SQLitePlaceRepository) -> None:
+    stored = repository.add(make_place(category=PlaceCategory.FUEL, user_id=42))
+
+    updated = repository.update(stored.id, user_id=42, category=PlaceCategory.CAFE)
+
+    assert updated is not None
+    assert updated.category is PlaceCategory.CAFE
+
+
+def test_update_with_none_leaves_fields_alone(
+    repository: SQLitePlaceRepository,
+) -> None:
+    stored = repository.add(make_place(name="Газпром", note="кругл", user_id=42))
+
+    updated = repository.update(stored.id, user_id=42, category=PlaceCategory.CAFE)
+
+    assert updated is not None
+    assert updated.name == "Газпром"
+    assert updated.note == "кругл"
+
+
+def test_update_with_empty_note_clears_it(repository: SQLitePlaceRepository) -> None:
+    stored = repository.add(make_place(note="кругл", user_id=42))
+
+    updated = repository.update(stored.id, user_id=42, note="")
+
+    assert updated is not None
+    assert updated.note == ""
+
+
+def test_update_by_another_user_returns_none(
+    repository: SQLitePlaceRepository,
+) -> None:
+    stored = repository.add(make_place(name="Газпром", user_id=42))
+
+    assert repository.update(stored.id, user_id=7, name="Взломано") is None
+    unchanged = repository.get(stored.id)
+    assert unchanged is not None
+    assert unchanged.name == "Газпром"
+
+
+def test_delete_removes_the_place(repository: SQLitePlaceRepository) -> None:
+    stored = repository.add(make_place(user_id=42))
+
+    assert repository.delete(stored.id, user_id=42) is True
+    assert repository.get(stored.id) is None
+
+
+def test_delete_by_another_user_returns_false(
+    repository: SQLitePlaceRepository,
+) -> None:
+    stored = repository.add(make_place(user_id=42))
+
+    assert repository.delete(stored.id, user_id=7) is False
+    assert repository.get(stored.id) is not None

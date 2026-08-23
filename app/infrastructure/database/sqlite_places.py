@@ -161,6 +161,65 @@ class SQLitePlaceRepository:
             and _names_overlap(normalized_name, stored_name)
         ]
 
+    def update(
+        self,
+        place_id: int,
+        user_id: int,
+        name: str | None = None,
+        category: PlaceCategory | None = None,
+        note: str | None = None,
+    ) -> Place | None:
+        assignments: list[str] = []
+        parameters: list[object] = []
+
+        if name is not None:
+            assignments.extend(["name = ?", "name_normalized = ?"])
+            parameters.extend([name, normalize_name(name)])
+
+        if category is not None:
+            assignments.append("category = ?")
+            parameters.append(category.value)
+
+        if note is not None:
+            assignments.append("note = ?")
+            parameters.append(note)
+
+        if not assignments:
+            return self._get_owned(place_id, user_id)
+
+        parameters.extend([place_id, user_id])
+        with self._connect() as connection:
+            cursor = connection.execute(
+                f"""
+                UPDATE places SET {', '.join(assignments)}
+                -- ownership lives in this one statement's WHERE, not a
+                -- separate read then write, so nothing can change the owner
+                -- in between the two
+                WHERE id = ? AND added_by_user_id = ?
+                """,
+                parameters,
+            )
+            connection.commit()
+            if cursor.rowcount == 0:
+                return None
+
+        return self.get(place_id)
+
+    def delete(self, place_id: int, user_id: int) -> bool:
+        with self._connect() as connection:
+            cursor = connection.execute(
+                "DELETE FROM places WHERE id = ? AND added_by_user_id = ?",
+                (place_id, user_id),
+            )
+            connection.commit()
+            return cursor.rowcount > 0
+
+    def _get_owned(self, place_id: int, user_id: int) -> Place | None:
+        place = self.get(place_id)
+        if place is None or place.added_by_user_id != user_id:
+            return None
+        return place
+
     def _initialize(self) -> None:
         with self._connect() as connection:
             connection.execute(
