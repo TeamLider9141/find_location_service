@@ -2717,6 +2717,10 @@ BLANK_NAME_MESSAGE = "Nom bo'sh bo'lmasligi kerak. Joy nomini yozing."
 
 @router.message(F.text == ADD_PLACE_BUTTON)
 async def handle_add_place_start(message: Message, state: FSMContext) -> None:
+    # Clear before setting the state: an abandoned flow leaves its name and
+    # coordinates in storage, and carrying them into a fresh attempt would file
+    # the new place at the old location.
+    await state.set_data({})
     await state.set_state(AddPlace.name)
     await message.answer(ASK_NAME_MESSAGE)
 
@@ -2739,7 +2743,9 @@ async def handle_name(message: Message, state: FSMContext) -> None:
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `python -m pytest tests/unit/test_add_place_handlers.py -v`
-Expected: PASS (3 passed)
+Expected: PASS (7 passed — the 3 below plus the full category keyboard, and three
+tests around the rejected name: it is not stored, it offers no keyboard, and a
+restarted flow drops what an abandoned one left in storage)
 
 - [ ] **Step 5: Commit**
 
