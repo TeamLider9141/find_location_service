@@ -4637,8 +4637,11 @@ module path in imports of `InMemoryUserSettingsStore` — that file keeps its na
 - [ ] **Step 7: Run the whole suite**
 
 Run: `python -m pytest -q`
-Expected: PASS. The suite is now roughly **75 passed** with no skips — the skipped test was
-the live Nominatim integration test, which is gone.
+Expected: PASS — **216 passed**, no skips. (The plan estimated ~75; the extra
+tests are the ones added beyond the plan in Tasks 8-23. The skipped test was the
+live Nominatim integration test, which is gone.) `app/infrastructure/providers/`
+is deleted too: after the `osm` package goes, only an empty `__init__.py` is
+left.
 
 If anything fails with `ImportError`, the failing module still references a deleted name;
 fix the import rather than restoring the file.
