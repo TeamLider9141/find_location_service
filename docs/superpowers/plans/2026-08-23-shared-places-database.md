@@ -2210,7 +2210,9 @@ SAVED_LOCATIONS_BUTTON = MY_PLACES_BUTTON
 - [ ] **Step 7: Run the whole suite**
 
 Run: `python -m pytest -q`
-Expected: **169 passed, 1 skipped** (168 after Task 13; the keyboard file went from 2 tests
+Expected: **174 passed, 1 skipped** (173 after Task 13, which added 5 tests beyond the 6
+below — GetPlaceUseCase had none, and update's trimming, note-clearing and no-op paths were
+unpinned; the keyboard file went from 2 tests
 to 3, and the old `test_saved_place_keyboards.py` still passes)
 
 If a test still fails because it asserted the old three-row layout, update that assertion
