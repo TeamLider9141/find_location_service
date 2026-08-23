@@ -3006,7 +3006,11 @@ def format_duplicate_warning(duplicates: list[CommunityPlace]) -> str:
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `python -m pytest tests/unit/test_add_place_handlers.py -v`
-Expected: PASS (7 passed)
+Expected: PASS (20 passed — the 7 tests of Task 17 plus the 4 below and nine more:
+the category step keeps the name and closes the spinner, it survives a message too
+old to answer, the location step reads a venue and typed coordinates, a rejected
+location is not stored, and the duplicate branch is exercised in all three ways —
+a nearby namesake warns, a far one does not, and the coordinates survive the warning)
 
 - [ ] **Step 5: Commit**
 
