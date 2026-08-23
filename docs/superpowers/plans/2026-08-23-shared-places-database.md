@@ -3697,7 +3697,11 @@ def _coordinates_from_message(message: Message) -> Coordinates | None:
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `python -m pytest tests/unit/test_find_place_handlers.py -v`
-Expected: PASS (8 passed)
+Expected: PASS (22 passed — the 8 below plus the result keyboard's ids, both result
+limits, a blank query, both database failures, an unknown category, a message too
+old to answer, nearby's distances and radius, nearby's cancel and its refusal to
+give up after unreadable text, a non-numeric place id, and a card opened by a
+driver who did not add the place)
 
 - [ ] **Step 5: Commit**
 
