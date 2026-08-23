@@ -1,7 +1,7 @@
 import sqlite3
 from dataclasses import dataclass
 from datetime import datetime
-from math import cos, radians
+from math import asin, cos, degrees, radians, sin
 from pathlib import Path
 from sqlite3 import Row
 
@@ -14,7 +14,8 @@ _COLUMNS = """
     id, added_by_user_id, name, category, latitude, longitude, note, created_at
 """
 
-_METERS_PER_LATITUDE_DEGREE = 111_320
+_EARTH_RADIUS_METERS = 6_371_000
+_BOX_MARGIN = 1.001
 
 
 class SQLitePlaceRepository:
@@ -124,7 +125,7 @@ class SQLitePlaceRepository:
         ]
         within_radius = [item for item in within_radius if item[0] <= radius_meters]
         within_radius.sort(key=lambda item: item[0])
-        return [place for _, place in within_radius[:limit]]
+        return [place for _, place in within_radius[: max(limit, 0)]]
 
     def _initialize(self) -> None:
         with self._connect() as connection:
@@ -177,15 +178,28 @@ class _BoundingBox:
 
 
 def _bounding_box(coordinates: Coordinates, radius_meters: int) -> _BoundingBox:
-    """A square that certainly contains the radius circle.
+    """A rectangle that contains the radius circle, with a small safety margin.
 
-    Cheap prefilter only — the exact Haversine check happens in Python. Longitude
-    degrees shrink towards the poles, so the span is divided by cos(latitude);
-    near the poles that blows up, hence the clamp.
+    This is a cheap prefilter — the exact Haversine check runs in Python
+    afterwards — so the box may be too large but must never be too small.
+    That is why it measures on the same sphere as ``Coordinates.distance_to``:
+    a flat metres-per-degree constant comes out slightly narrower than Haversine
+    measures and silently drops places that are genuinely inside the radius.
+
+    The box does not wrap the antimeridian; a search centred near +/-180
+    longitude is clipped rather than continued on the other side. That costs
+    nothing for the drivers this bot serves.
     """
-    latitude_delta = radius_meters / _METERS_PER_LATITUDE_DEGREE
-    latitude_scale = max(cos(radians(coordinates.latitude)), 0.01)
-    longitude_delta = radius_meters / (_METERS_PER_LATITUDE_DEGREE * latitude_scale)
+    angular_radius = radius_meters * _BOX_MARGIN / _EARTH_RADIUS_METERS
+    latitude_delta = degrees(angular_radius)
+
+    # Longitude degrees shrink towards the poles, so the same distance spans
+    # more of them the further north you are. Close enough to a pole the circle
+    # covers every longitude, which is what a sine of 1 or more means.
+    longitude_sine = sin(angular_radius) / max(cos(radians(coordinates.latitude)), 1e-9)
+    longitude_delta = (
+        180.0 if longitude_sine >= 1 else degrees(asin(longitude_sine))
+    )
 
     return _BoundingBox(
         min_latitude=max(coordinates.latitude - latitude_delta, -90.0),

@@ -180,3 +180,49 @@ def test_nearby_respects_limit(repository: SQLitePlaceRepository) -> None:
     )
 
     assert len(results) == 2
+
+
+def test_nearby_keeps_places_just_inside_the_radius(
+    repository: SQLitePlaceRepository,
+) -> None:
+    # 4997.9 m due north. A bounding box built from a flat 111_320 m per degree
+    # reaches only 4994.4 m, so it would drop this place before the exact
+    # distance check ever saw it.
+    repository.add(make_place(name="Впритык", latitude=55.79494719, longitude=37.6100))
+
+    results = repository.nearby(
+        Coordinates(latitude=55.7500, longitude=37.6100),
+        radius_meters=5_000,
+    )
+
+    assert [place.name for place in results] == ["Впритык"]
+
+
+def test_nearby_measures_distance_and_not_just_the_bounding_box(
+    repository: SQLitePlaceRepository,
+) -> None:
+    # 6241 m away, but inside the box corner — only the Haversine check rejects it.
+    repository.add(make_place(name="Угол", latitude=55.7900, longitude=37.6800))
+    repository.add(make_place(name="Рядом", latitude=55.7510, longitude=37.6100))
+
+    results = repository.nearby(
+        Coordinates(latitude=55.7500, longitude=37.6100),
+        radius_meters=5_000,
+    )
+
+    assert [place.name for place in results] == ["Рядом"]
+
+
+def test_nearby_returns_places_at_the_same_distance(
+    repository: SQLitePlaceRepository,
+) -> None:
+    # Equidistant, so sorting must not fall back to comparing the places themselves.
+    repository.add(make_place(name="Север", latitude=55.7600, longitude=37.6100))
+    repository.add(make_place(name="Юг", latitude=55.7400, longitude=37.6100))
+
+    results = repository.nearby(
+        Coordinates(latitude=55.7500, longitude=37.6100),
+        radius_meters=5_000,
+    )
+
+    assert {place.name for place in results} == {"Север", "Юг"}
