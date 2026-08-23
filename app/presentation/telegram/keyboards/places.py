@@ -6,10 +6,10 @@ from app.presentation.telegram.keyboards.categories import category_label
 
 def build_category_choice_keyboard(prefix: str) -> InlineKeyboardMarkup:
     """One button per category, each callback prefixed by the caller's flow."""
-    # Iterating PlaceCategory rather than editable_categories() keeps the
-    # keyboard in step with the enum: a category added to the domain shows up
-    # here without a second edit. A label table that fell behind is what hid
-    # CAFE from the UI before.
+    # Iterating PlaceCategory rather than the label table keeps the keyboard in
+    # step with the enum: a category added to the domain shows up here without a
+    # second edit. A label table that fell behind is what hid CAFE from the UI
+    # before.
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [

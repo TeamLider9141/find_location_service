@@ -29,7 +29,7 @@ def test_category_choice_offers_every_category() -> None:
 
 
 def test_category_choice_labels_every_button() -> None:
-    # Iterating PlaceCategory instead of editable_categories() is what keeps a
+    # Iterating PlaceCategory instead of the label table is what keeps a
     # category from silently vanishing from the UI, so the labels have to come
     # from the same table the rest of the bot uses.
     keyboard = build_category_choice_keyboard("pick")

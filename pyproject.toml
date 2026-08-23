@@ -1,11 +1,10 @@
 [project]
 name = "find-location"
 version = "0.1.0"
-description = "Provider-agnostic location search pipeline for a driver Telegram bot."
-requires-python = ">=3.12"
+description = "Telegram bot for a shared database of roadside places kept by drivers."
+requires-python = ">=3.10"
 dependencies = [
     "aiogram>=3.13,<4",
-    "httpx>=0.27,<1",
 ]
 
 [project.optional-dependencies]
@@ -17,10 +16,7 @@ dev = [
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
-markers = [
-    "integration: tests that call external services",
-]
 
 [tool.ruff]
 line-length = 100
-target-version = "py312"
+target-version = "py310"
