@@ -226,3 +226,23 @@ def test_nearby_returns_places_at_the_same_distance(
     )
 
     assert {place.name for place in results} == {"Север", "Юг"}
+
+
+def test_list_by_author_returns_only_that_users_places(
+    repository: SQLitePlaceRepository,
+) -> None:
+    repository.add(make_place(name="Моё", user_id=42))
+    repository.add(make_place(name="Чужое", user_id=7))
+
+    results = repository.list_by_author(42)
+
+    assert [place.name for place in results] == ["Моё"]
+
+
+def test_list_by_author_returns_newest_first(repository: SQLitePlaceRepository) -> None:
+    first = repository.add(make_place(name="Первое", user_id=42))
+    second = repository.add(make_place(name="Второе", user_id=42))
+
+    results = repository.list_by_author(42)
+
+    assert [place.id for place in results] == [second.id, first.id]

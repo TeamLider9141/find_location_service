@@ -127,6 +127,19 @@ class SQLitePlaceRepository:
         within_radius.sort(key=lambda item: item[0])
         return [place for _, place in within_radius[: max(limit, 0)]]
 
+    def list_by_author(self, user_id: int) -> list[Place]:
+        with self._connect() as connection:
+            rows = connection.execute(
+                f"""
+                SELECT {_COLUMNS} FROM places
+                WHERE added_by_user_id = ?
+                ORDER BY id DESC
+                """,
+                (user_id,),
+            ).fetchall()
+
+        return [_map_row(row) for row in rows]
+
     def _initialize(self) -> None:
         with self._connect() as connection:
             connection.execute(
