@@ -1389,7 +1389,7 @@ Add to `SQLitePlaceRepository`, after `find_duplicates`:
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `python -m pytest tests/unit/test_sqlite_place_repository.py -v`
-Expected: PASS (29 passed)
+Expected: PASS (35 passed — 28 already in the file plus the 7 above)
 
 - [ ] **Step 5: Commit**
 
