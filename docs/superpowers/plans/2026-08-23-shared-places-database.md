@@ -4301,7 +4301,11 @@ async def test_cancel_clears_any_pending_flow() -> None:
 - [ ] **Step 5: Run both tests**
 
 Run: `python -m pytest tests/unit/test_telegram_bot.py tests/unit/test_start_handlers.py -v`
-Expected: PASS (4 passed)
+Expected: PASS (9 passed — the 4 above plus five more: `create_bot` still refuses
+a missing token, every use case holds the repository it was given, the
+dispatcher keeps FSM storage, and /start drops a half-finished flow. The
+handler routers are module-level singletons and aiogram refuses to attach one
+twice, so the dispatcher tests share a module-scoped fixture.)
 
 - [ ] **Step 6: Commit**
 
@@ -4453,7 +4457,8 @@ if __name__ == "__main__":
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `python -m pytest tests/unit/test_settings.py -v`
-Expected: PASS (5 passed)
+Expected: PASS (7 passed — the 5 above plus dotenv parsing of quotes, comments
+and `export`, and a missing dotenv file being no error)
 
 - [ ] **Step 5: Verify the CLI still starts**
 
@@ -4463,6 +4468,8 @@ Expected: argparse usage text, exit code 0.
 - [ ] **Step 6: Commit**
 
 ```bash
+# Landed together with Task 22: app/main.py imports the bot.py factories that
+# task deletes, so split apart the intermediate commit could not start the bot.
 git add app/main.py app/config/settings.py .env.example tests/unit/test_settings.py
 git commit -m "feat(config): drop provider settings and the geocoding CLI"
 
