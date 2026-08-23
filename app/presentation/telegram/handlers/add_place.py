@@ -1,13 +1,27 @@
+import sqlite3
+
 from aiogram import F, Router
+from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
 from app.application.use_cases.places import AddPlaceUseCase
 from app.domain.value_objects.category import PlaceCategory
 from app.domain.value_objects.coordinates import Coordinates
-from app.presentation.telegram.errors import EXPIRED_MESSAGE, answerable_message
-from app.presentation.telegram.formatters import format_duplicate_warning
-from app.presentation.telegram.keyboards.menu import ADD_PLACE_BUTTON
+from app.presentation.telegram.errors import (
+    EXPIRED_MESSAGE,
+    answerable_message,
+    report_service_error,
+    user_id_of,
+)
+from app.presentation.telegram.formatters import (
+    format_duplicate_warning,
+    format_place_card,
+)
+from app.presentation.telegram.keyboards.menu import (
+    ADD_PLACE_BUTTON,
+    build_main_menu_keyboard,
+)
 from app.presentation.telegram.keyboards.places import (
     build_category_choice_keyboard,
     build_duplicate_confirmation_keyboard,
@@ -33,6 +47,9 @@ ASK_NOTE_MESSAGE = (
     "Kerak bo'lmasa /skip yuboring."
 )
 INVALID_CATEGORY_MESSAGE = "Bunday kategoriya yo'q. Ro'yxatdan tanlang."
+CANCELLED_MESSAGE = "Bekor qilindi. Boshlang'ich menyuga qaytdingiz."
+SAVE_FAILED_MESSAGE = "Saqlab bo'lmadi. Qaytadan urinib ko'ring."
+DATABASE_ERROR_MESSAGE = "Baza bilan muammo. Birozdan so'ng urinib ko'ring."
 
 
 @router.message(F.text == ADD_PLACE_BUTTON)
@@ -141,3 +158,94 @@ def _coordinates_from_message(message: Message) -> Coordinates | None:
         return parse_coordinates_from_text(text)
 
     return None
+
+
+@router.callback_query(AddPlace.duplicate, F.data.startswith("add_place:duplicate:"))
+async def handle_duplicate_answer(
+    callback_query: CallbackQuery,
+    state: FSMContext,
+) -> None:
+    message = answerable_message(callback_query)
+    if message is None:
+        await state.clear()
+        await callback_query.answer(EXPIRED_MESSAGE)
+        return
+
+    # Only an explicit yes continues. Anything else — including a garbled
+    # callback — falls through to the cancel branch rather than being read as
+    # consent to add a second copy of a place someone already shared.
+    if callback_query.data == "add_place:duplicate:yes":
+        await state.set_state(AddPlace.note)
+        await message.answer(ASK_NOTE_MESSAGE)
+    else:
+        await state.clear()
+        await message.answer(CANCELLED_MESSAGE, reply_markup=build_main_menu_keyboard())
+
+    await callback_query.answer()
+
+
+@router.message(AddPlace.note, Command("skip"))
+async def handle_skip_note(
+    message: Message,
+    state: FSMContext,
+    add_place: AddPlaceUseCase,
+) -> None:
+    await _save(message, state, add_place, note="")
+
+
+@router.message(AddPlace.note, F.text)
+async def handle_note(
+    message: Message,
+    state: FSMContext,
+    add_place: AddPlaceUseCase,
+) -> None:
+    await _save(message, state, add_place, note=message.text or "")
+
+
+@router.message(AddPlace(), Command("cancel"))
+async def handle_cancel(message: Message, state: FSMContext) -> None:
+    await state.clear()
+    await message.answer(CANCELLED_MESSAGE, reply_markup=build_main_menu_keyboard())
+
+
+async def _save(
+    message: Message,
+    state: FSMContext,
+    add_place: AddPlaceUseCase,
+    note: str,
+) -> None:
+    data = await state.get_data()
+    user_id = user_id_of(message)
+    if user_id is None:
+        await state.clear()
+        return
+
+    try:
+        place = add_place.execute(
+            user_id=user_id,
+            name=str(data["name"]),
+            category=PlaceCategory(str(data["category"])),
+            coordinates=Coordinates(
+                latitude=float(data["latitude"]),
+                longitude=float(data["longitude"]),
+            ),
+            note=note,
+        )
+    # A flow that lost a step leaves the state short of a key, and a place
+    # written without it would land at the wrong coordinates rather than fail.
+    except (KeyError, ValueError) as error:
+        report_service_error(error, "add place")
+        await state.clear()
+        await message.answer(SAVE_FAILED_MESSAGE, reply_markup=build_main_menu_keyboard())
+        return
+    except sqlite3.Error as error:
+        report_service_error(error, "add place")
+        await state.clear()
+        await message.answer(DATABASE_ERROR_MESSAGE, reply_markup=build_main_menu_keyboard())
+        return
+
+    await state.clear()
+    await message.answer(
+        f"✅ Saqlandi.\n\n{format_place_card(place)}",
+        reply_markup=build_main_menu_keyboard(),
+    )

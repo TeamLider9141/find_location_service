@@ -1,3 +1,5 @@
+import sqlite3
+
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.storage.base import StorageKey
 from aiogram.fsm.storage.memory import MemoryStorage
@@ -8,9 +10,13 @@ from app.domain.value_objects.coordinates import Coordinates
 from app.infrastructure.repositories.in_memory_places import InMemoryPlaceRepository
 from app.presentation.telegram.handlers.add_place import (
     handle_add_place_start,
+    handle_cancel,
     handle_category,
+    handle_duplicate_answer,
     handle_location,
     handle_name,
+    handle_note,
+    handle_skip_note,
 )
 from app.presentation.telegram.states import AddPlace
 
@@ -355,3 +361,215 @@ async def test_the_duplicate_branch_keeps_the_coordinates_it_was_given() -> None
 
     data = await state.get_data()
     assert (data["latitude"], data["longitude"]) == (55.7501, 37.6101)
+
+
+async def _state_at_note(name: str = "Газпром") -> FSMContext:
+    state = make_state()
+    await state.set_state(AddPlace.note)
+    await state.update_data(
+        name=name,
+        category=PlaceCategory.FUEL.value,
+        latitude=55.75,
+        longitude=37.61,
+    )
+    return state
+
+
+class ExplodingRepository(InMemoryPlaceRepository):
+    def add(self, place):  # type: ignore[no-untyped-def]
+        raise sqlite3.OperationalError("database is locked")
+
+
+async def test_note_step_saves_the_place_and_clears_the_flow() -> None:
+    repository = InMemoryPlaceRepository()
+    state = await _state_at_note()
+    message = FakeMessage(text="M5, 120 км")
+
+    await handle_note(message, state, add_place=AddPlaceUseCase(repository))
+
+    stored = repository.search(name="газпром")
+    assert len(stored) == 1
+    assert stored[0].note == "M5, 120 км"
+    assert stored[0].added_by_user_id == 42
+    assert await state.get_state() is None
+
+
+async def test_a_saved_place_is_shown_back_with_the_main_menu() -> None:
+    # The card carries the map link, so the driver can check the pin landed
+    # where they meant it to before anyone else searches for it.
+    repository = InMemoryPlaceRepository()
+    state = await _state_at_note()
+    message = FakeMessage(text="M5, 120 км")
+
+    await handle_note(message, state, add_place=AddPlaceUseCase(repository))
+
+    text = str(message.answers[-1]["text"])
+    assert "Газпром" in text
+    assert "query=55.75,37.61" in text
+    assert message.answers[-1]["reply_markup"] is not None
+
+
+async def test_the_place_is_saved_at_the_coordinates_the_flow_collected() -> None:
+    repository = InMemoryPlaceRepository()
+    state = await _state_at_note()
+
+    await handle_note(
+        FakeMessage(text="M5"),
+        state,
+        add_place=AddPlaceUseCase(repository),
+    )
+
+    stored = repository.search(name="газпром")[0]
+    assert (stored.coordinates.latitude, stored.coordinates.longitude) == (55.75, 37.61)
+    assert stored.category is PlaceCategory.FUEL
+
+
+async def test_skip_note_saves_the_place_without_a_note() -> None:
+    repository = InMemoryPlaceRepository()
+    state = await _state_at_note()
+    message = FakeMessage(text="/skip")
+
+    await handle_skip_note(message, state, add_place=AddPlaceUseCase(repository))
+
+    stored = repository.search(name="газпром")
+    assert stored[0].note == ""
+    assert await state.get_state() is None
+
+
+async def test_a_half_finished_flow_does_not_save_a_broken_place() -> None:
+    # The location step is the only thing that puts coordinates in the state.
+    # Without them the save must fail loudly rather than write a place at 0,0.
+    repository = InMemoryPlaceRepository()
+    state = make_state()
+    await state.set_state(AddPlace.note)
+    await state.update_data(name="Газпром", category=PlaceCategory.FUEL.value)
+    message = FakeMessage(text="M5")
+
+    await handle_note(message, state, add_place=AddPlaceUseCase(repository))
+
+    assert repository.search() == []
+    assert await state.get_state() is None
+    assert "urinib" in str(message.answers[-1]["text"]).lower()
+
+
+async def test_a_database_failure_tells_the_driver_and_clears_the_flow() -> None:
+    # SQLite locks under concurrent writes; the driver must not be left staring
+    # at a flow that swallowed their input.
+    state = await _state_at_note()
+    message = FakeMessage(text="M5")
+
+    await handle_note(
+        message,
+        state,
+        add_place=AddPlaceUseCase(ExplodingRepository()),
+    )
+
+    assert await state.get_state() is None
+    assert "baza" in str(message.answers[-1]["text"]).lower()
+
+
+async def test_duplicate_yes_moves_on_to_the_note_step() -> None:
+    state = make_state()
+    await state.set_state(AddPlace.duplicate)
+    await state.update_data(
+        name="Газпром",
+        category=PlaceCategory.FUEL.value,
+        latitude=55.75,
+        longitude=37.61,
+    )
+    callback = FakeCallbackQuery("add_place:duplicate:yes")
+
+    await handle_duplicate_answer(callback, state)
+
+    assert await state.get_state() == AddPlace.note.state
+
+
+async def test_duplicate_yes_keeps_the_data_the_save_step_needs() -> None:
+    state = make_state()
+    await state.set_state(AddPlace.duplicate)
+    await state.update_data(
+        name="Газпром",
+        category=PlaceCategory.FUEL.value,
+        latitude=55.75,
+        longitude=37.61,
+    )
+
+    await handle_duplicate_answer(FakeCallbackQuery("add_place:duplicate:yes"), state)
+
+    data = await state.get_data()
+    assert (data["name"], data["latitude"], data["longitude"]) == ("Газпром", 55.75, 37.61)
+
+
+async def test_duplicate_no_abandons_the_flow() -> None:
+    repository = InMemoryPlaceRepository()
+    state = make_state()
+    await state.set_state(AddPlace.duplicate)
+    await state.update_data(name="Газпром", category=PlaceCategory.FUEL.value)
+    callback = FakeCallbackQuery("add_place:duplicate:no")
+
+    await handle_duplicate_answer(callback, state)
+
+    assert await state.get_state() is None
+    assert repository.search() == []
+
+
+async def test_an_unreadable_duplicate_answer_abandons_rather_than_saves() -> None:
+    # Anything that is not an explicit yes falls through to the cancel branch:
+    # a garbled callback must not be read as consent to add a second copy.
+    state = make_state()
+    await state.set_state(AddPlace.duplicate)
+    await state.update_data(name="Газпром")
+    callback = FakeCallbackQuery("add_place:duplicate:")
+
+    await handle_duplicate_answer(callback, state)
+
+    assert await state.get_state() is None
+
+
+async def test_a_duplicate_answer_on_an_expired_message_clears_the_flow() -> None:
+    state = make_state()
+    await state.set_state(AddPlace.duplicate)
+    callback = FakeCallbackQuery("add_place:duplicate:yes", with_message=False)
+
+    await handle_duplicate_answer(callback, state)
+
+    assert await state.get_state() is None
+    assert callback.alerts[0] is not None
+
+
+async def test_cancel_clears_the_flow_at_any_step() -> None:
+    state = make_state()
+    await state.set_state(AddPlace.location)
+    await state.update_data(name="Газпром")
+    message = FakeMessage(text="/cancel")
+
+    await handle_cancel(message, state)
+
+    assert await state.get_state() is None
+    assert await state.get_data() == {}
+
+
+async def test_cancel_at_the_note_step_saves_nothing() -> None:
+    # The last step is one keystroke from a write; cancel has to beat it.
+    repository = InMemoryPlaceRepository()
+    state = await _state_at_note()
+
+    await handle_cancel(FakeMessage(text="/cancel"), state)
+
+    assert repository.search() == []
+    assert await state.get_data() == {}
+
+
+async def test_a_place_with_no_author_is_not_saved() -> None:
+    # Channel posts and anonymous admins arrive without from_user. A place
+    # stored under a placeholder author belongs to nobody: its contributor
+    # could never edit or delete it, and neither could anyone else.
+    repository = InMemoryPlaceRepository()
+    state = await _state_at_note()
+    message = FakeMessage(text="M5")
+    message.from_user = None
+
+    await handle_note(message, state, add_place=AddPlaceUseCase(repository))
+
+    assert repository.search() == []
+    assert await state.get_state() is None
