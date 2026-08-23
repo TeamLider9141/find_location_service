@@ -215,6 +215,56 @@ class SQLitePlaceRepository:
             connection.commit()
             return cursor.rowcount > 0
 
+    def delete_any(self, place_id: int) -> bool:
+        # No author in the WHERE clause: the admin panel is the only caller, and
+        # a place nobody can reach the author of still has to be removable.
+        with closing(self._connect()) as connection:
+            cursor = connection.execute("DELETE FROM places WHERE id = ?", (place_id,))
+            connection.commit()
+            return cursor.rowcount > 0
+
+    def count(self) -> int:
+        with closing(self._connect()) as connection:
+            row = connection.execute("SELECT COUNT(*) AS total FROM places").fetchone()
+
+        return int(row["total"])
+
+    def count_added_since(self, days: int) -> int:
+        # created_at is naive UTC written by CURRENT_TIMESTAMP, so the window is
+        # measured with SQLite's own clock rather than Python's.
+        with closing(self._connect()) as connection:
+            row = connection.execute(
+                """
+                SELECT COUNT(*) AS total FROM places
+                WHERE created_at >= datetime('now', ?)
+                """,
+                (f"-{max(days, 0)} days",),
+            ).fetchone()
+
+        return int(row["total"])
+
+    def count_by_category(self) -> dict[PlaceCategory, int]:
+        with closing(self._connect()) as connection:
+            rows = connection.execute(
+                "SELECT category, COUNT(*) AS total FROM places GROUP BY category"
+            ).fetchall()
+
+        return {PlaceCategory(str(row["category"])): int(row["total"]) for row in rows}
+
+    def top_authors(self, limit: int = 10) -> list[tuple[int, int]]:
+        with closing(self._connect()) as connection:
+            rows = connection.execute(
+                """
+                SELECT added_by_user_id, COUNT(*) AS total FROM places
+                GROUP BY added_by_user_id
+                ORDER BY total DESC, added_by_user_id ASC
+                LIMIT ?
+                """,
+                (max(limit, 0),),
+            ).fetchall()
+
+        return [(int(row["added_by_user_id"]), int(row["total"])) for row in rows]
+
     def _get_owned(self, place_id: int, user_id: int) -> Place | None:
         with closing(self._connect()) as connection:
             row = connection.execute(

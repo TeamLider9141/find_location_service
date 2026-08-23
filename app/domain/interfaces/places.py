@@ -61,3 +61,18 @@ class PlaceRepository(Protocol):
 
     def delete(self, place_id: int, user_id: int) -> bool:
         """Delete a place the user contributed. False when not theirs."""
+
+    def delete_any(self, place_id: int) -> bool:
+        """Delete a place whoever added it. Moderation only — never a driver path."""
+
+    def count(self) -> int:
+        """Return how many places the database holds."""
+
+    def count_added_since(self, days: int) -> int:
+        """Return how many places were added within the last ``days`` days."""
+
+    def count_by_category(self) -> dict[PlaceCategory, int]:
+        """Return the place count per category. Unused categories are absent."""
+
+    def top_authors(self, limit: int = 10) -> list[tuple[int, int]]:
+        """Return (user id, places added) pairs, biggest contributor first."""

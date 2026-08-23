@@ -1,5 +1,6 @@
+from collections import Counter
 from dataclasses import replace
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from app.application.name_normalization import normalize_name
 from app.domain.entities.place import Place
@@ -140,6 +141,34 @@ class InMemoryPlaceRepository:
 
         del self._places[place_id]
         return True
+
+    def delete_any(self, place_id: int) -> bool:
+        return self._places.pop(place_id, None) is not None
+
+    def count(self) -> int:
+        return len(self._places)
+
+    def count_added_since(self, days: int) -> int:
+        # Truncate to whole seconds before subtracting: add() stores created_at
+        # at CURRENT_TIMESTAMP resolution, so a cutoff carrying microseconds
+        # would leave a place added this same second just outside the window.
+        now = datetime.now(timezone.utc).replace(microsecond=0, tzinfo=None)
+        cutoff = now - timedelta(days=max(days, 0))
+        return sum(1 for place in self._places.values() if place.created_at >= cutoff)
+
+    def count_by_category(self) -> dict[PlaceCategory, int]:
+        counts: Counter[PlaceCategory] = Counter(
+            place.category for place in self._places.values()
+        )
+        return dict(counts)
+
+    def top_authors(self, limit: int = 10) -> list[tuple[int, int]]:
+        counts: Counter[int] = Counter(
+            place.added_by_user_id for place in self._places.values()
+        )
+        # Ties break on the user id, the same ORDER BY the SQL uses.
+        ranked = sorted(counts.items(), key=lambda item: (-item[1], item[0]))
+        return ranked[: max(limit, 0)]
 
 
 def _category_value(category: PlaceCategory | None) -> str | None:
