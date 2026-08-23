@@ -1,4 +1,5 @@
 import sqlite3
+from contextlib import closing
 from dataclasses import dataclass
 from datetime import datetime
 from math import asin, cos, degrees, radians, sin
@@ -26,7 +27,7 @@ class SQLitePlaceRepository:
         self._initialize()
 
     def add(self, place: Place) -> Place:
-        with self._connect() as connection:
+        with closing(self._connect()) as connection:
             cursor = connection.execute(
                 """
                 INSERT INTO places (
@@ -54,7 +55,7 @@ class SQLitePlaceRepository:
         return stored
 
     def get(self, place_id: int) -> Place | None:
-        with self._connect() as connection:
+        with closing(self._connect()) as connection:
             row = connection.execute(
                 f"SELECT {_COLUMNS} FROM places WHERE id = ?",
                 (place_id,),
@@ -83,7 +84,7 @@ class SQLitePlaceRepository:
         where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
         parameters.append(limit)
 
-        with self._connect() as connection:
+        with closing(self._connect()) as connection:
             rows = connection.execute(
                 f"SELECT {_COLUMNS} FROM places {where} ORDER BY name ASC LIMIT ?",
                 parameters,
@@ -114,7 +115,7 @@ class SQLitePlaceRepository:
             conditions.append("category = ?")
             parameters.append(category.value)
 
-        with self._connect() as connection:
+        with closing(self._connect()) as connection:
             rows = connection.execute(
                 f"SELECT {_COLUMNS} FROM places WHERE {' AND '.join(conditions)}",
                 parameters,
@@ -131,7 +132,7 @@ class SQLitePlaceRepository:
     def list_by_author(self, user_id: int) -> list[Place]:
         # Newest first by id, not created_at: CURRENT_TIMESTAMP has one-second
         # resolution, so places added together would tie and order arbitrarily.
-        with self._connect() as connection:
+        with closing(self._connect()) as connection:
             rows = connection.execute(
                 f"""
                 SELECT {_COLUMNS} FROM places
@@ -191,7 +192,7 @@ class SQLitePlaceRepository:
         # The author check rides in the WHERE clause, not a separate read then
         # write, so no concurrent request can slip between a check and a write.
         # delete() and _get_owned() do the same.
-        with self._connect() as connection:
+        with closing(self._connect()) as connection:
             cursor = connection.execute(
                 f"""
                 UPDATE places SET {', '.join(assignments)}
@@ -206,7 +207,7 @@ class SQLitePlaceRepository:
         return self.get(place_id)
 
     def delete(self, place_id: int, user_id: int) -> bool:
-        with self._connect() as connection:
+        with closing(self._connect()) as connection:
             cursor = connection.execute(
                 "DELETE FROM places WHERE id = ? AND added_by_user_id = ?",
                 (place_id, user_id),
@@ -215,7 +216,7 @@ class SQLitePlaceRepository:
             return cursor.rowcount > 0
 
     def _get_owned(self, place_id: int, user_id: int) -> Place | None:
-        with self._connect() as connection:
+        with closing(self._connect()) as connection:
             row = connection.execute(
                 f"""
                 SELECT {_COLUMNS} FROM places
@@ -227,7 +228,7 @@ class SQLitePlaceRepository:
         return _map_row(row) if row is not None else None
 
     def _initialize(self) -> None:
-        with self._connect() as connection:
+        with closing(self._connect()) as connection:
             connection.execute(
                 """
                 CREATE TABLE IF NOT EXISTS places (
@@ -257,6 +258,9 @@ class SQLitePlaceRepository:
             )
             connection.commit()
 
+    # closing(), not the connection's own context manager: that one commits or
+    # rolls back a transaction and leaves the connection open. Every write below
+    # commits explicitly, so what is left to manage is the handle itself.
     def _connect(self) -> sqlite3.Connection:
         connection = sqlite3.connect(self._database_path)
         connection.row_factory = Row
