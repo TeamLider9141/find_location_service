@@ -1836,7 +1836,12 @@ class AddPlaceUseCase:
                 category=category,
                 coordinates=coordinates,
                 note=note.strip(),
-                created_at=datetime.now(timezone.utc),
+                # Both repositories stamp their own CURRENT_TIMESTAMP and discard
+                # whatever we pass here, so this value is never read back. It is
+                # naive UTC — not timezone-aware — because that is what every
+                # caller actually receives; the field has no default, so a value
+                # still has to be supplied.
+                created_at=datetime.now(timezone.utc).replace(tzinfo=None),
             )
         )
 
@@ -2068,8 +2073,9 @@ Expected: PASS (12 passed)
 - [ ] **Step 5: Run the whole suite**
 
 Run: `python -m pytest -q`
-Expected: **163 passed, 1 skipped** (157 after Task 12, which added 2 tests beyond the 6
-below to pin the name and note trimming, plus the 6 above)
+Expected: **166 passed, 1 skipped** (160 after Task 12, which added 5 tests beyond the 6
+below — name and note trimming, the nearby category filter, the duplicate radius default and
+the search limit default — plus one on the in-memory double, plus the 6 above)
 
 - [ ] **Step 6: Commit**
 
@@ -2204,7 +2210,7 @@ SAVED_LOCATIONS_BUTTON = MY_PLACES_BUTTON
 - [ ] **Step 7: Run the whole suite**
 
 Run: `python -m pytest -q`
-Expected: **164 passed, 1 skipped** (163 after Task 13; the keyboard file went from 2 tests
+Expected: **167 passed, 1 skipped** (166 after Task 13; the keyboard file went from 2 tests
 to 3, and the old `test_saved_place_keyboards.py` still passes)
 
 If a test still fails because it asserted the old three-row layout, update that assertion
