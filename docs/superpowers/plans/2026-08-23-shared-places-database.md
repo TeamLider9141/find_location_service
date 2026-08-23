@@ -2068,7 +2068,8 @@ Expected: PASS (12 passed)
 - [ ] **Step 5: Run the whole suite**
 
 Run: `python -m pytest -q`
-Expected: **161 passed, 1 skipped** (149 after Task 11, plus 6 from Task 12 and the 6 above)
+Expected: **163 passed, 1 skipped** (157 after Task 12, which added 2 tests beyond the 6
+below to pin the name and note trimming, plus the 6 above)
 
 - [ ] **Step 6: Commit**
 
@@ -2203,7 +2204,7 @@ SAVED_LOCATIONS_BUTTON = MY_PLACES_BUTTON
 - [ ] **Step 7: Run the whole suite**
 
 Run: `python -m pytest -q`
-Expected: **162 passed, 1 skipped** (161 after Task 13; the keyboard file went from 2 tests
+Expected: **164 passed, 1 skipped** (163 after Task 13; the keyboard file went from 2 tests
 to 3, and the old `test_saved_place_keyboards.py` still passes)
 
 If a test still fails because it asserted the old three-row layout, update that assertion
