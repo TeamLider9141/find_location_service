@@ -65,6 +65,11 @@ class SQLitePlaceRepository:
         conditions: list[str] = []
         parameters: list[object] = []
 
+        normalized_name = normalize_name(name) if name is not None else ""
+        if normalized_name:
+            conditions.append("name_normalized LIKE ? ESCAPE '\\'")
+            parameters.append(f"%{_escape_like(normalized_name)}%")
+
         if category is not None:
             conditions.append("category = ?")
             parameters.append(category.value)
@@ -115,6 +120,11 @@ class SQLitePlaceRepository:
         connection = sqlite3.connect(self._database_path)
         connection.row_factory = Row
         return connection
+
+
+def _escape_like(value: str) -> str:
+    """Neutralize LIKE wildcards so a name containing % or _ still matches literally."""
+    return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
 
 def _map_row(row: Row) -> Place:

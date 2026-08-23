@@ -84,3 +84,41 @@ def test_search_respects_limit(repository: SQLitePlaceRepository) -> None:
         repository.add(make_place(name=f"Газпром {index}"))
 
     assert len(repository.search(limit=2)) == 2
+
+
+def test_search_by_name_matches_a_substring(repository: SQLitePlaceRepository) -> None:
+    repository.add(make_place(name="Кафе У Дороги"))
+    repository.add(make_place(name="Газпром"))
+
+    results = repository.search(name="дороги")
+
+    assert [place.name for place in results] == ["Кафе У Дороги"]
+
+
+def test_search_by_latin_name_finds_a_cyrillic_record(
+    repository: SQLitePlaceRepository,
+) -> None:
+    repository.add(make_place(name="Газпром"))
+
+    results = repository.search(name="gazprom")
+
+    assert [place.name for place in results] == ["Газпром"]
+
+
+def test_search_by_name_and_category_applies_both(
+    repository: SQLitePlaceRepository,
+) -> None:
+    repository.add(make_place(name="Газпром", category=PlaceCategory.FUEL))
+    repository.add(make_place(name="Газпром кафе", category=PlaceCategory.CAFE))
+
+    results = repository.search(name="газпром", category=PlaceCategory.CAFE)
+
+    assert [place.name for place in results] == ["Газпром кафе"]
+
+
+def test_search_by_blank_name_is_treated_as_no_name_filter(
+    repository: SQLitePlaceRepository,
+) -> None:
+    repository.add(make_place(name="Газпром"))
+
+    assert len(repository.search(name="   ")) == 1
