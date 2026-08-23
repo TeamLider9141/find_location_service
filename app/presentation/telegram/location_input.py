@@ -15,7 +15,10 @@ def parse_coordinates_from_text(text: str) -> Coordinates | None:
         if coordinates is not None:
             return coordinates
 
-    return _parse_lat_lon_pair(unquote(text))
+    # Outside a link the whole message has to be the pair. Searching inside free
+    # text reads "Ленина 10, 25" as 10°N 25°E — an address typed at the location
+    # step would be stored 4000 km from where the driver stood.
+    return _parse_lat_lon_pair(unquote(text.strip()), whole=True)
 
 
 def _parse_coordinates_from_url(url: str) -> Coordinates | None:
@@ -36,8 +39,11 @@ def _parse_coordinates_from_url(url: str) -> Coordinates | None:
     return _parse_lat_lon_pair(unquote(parsed.path))
 
 
-def _parse_lat_lon_pair(value: str) -> Coordinates | None:
-    match = _DECIMAL_COORDINATE_RE.search(value)
+def _parse_lat_lon_pair(value: str, whole: bool = False) -> Coordinates | None:
+    if whole:
+        match = _DECIMAL_COORDINATE_RE.fullmatch(value)
+    else:
+        match = _DECIMAL_COORDINATE_RE.search(value)
     if match is None:
         return None
 
