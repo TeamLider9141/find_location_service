@@ -16,6 +16,12 @@ class InMemoryPlaceRepository:
         self._next_id = 1
 
     def add(self, place: Place) -> Place:
+        # The real repository reads category.value while building its INSERT, so
+        # it rejects a non-enum before anything is stored. Storing the raw value
+        # instead would leave a Place whose category is not a PlaceCategory, and
+        # every later read of that place would carry it.
+        _category_value(place.category)
+
         # The real repository leaves created_at out of its INSERT, so the column
         # takes CURRENT_TIMESTAMP and whatever the caller passed is discarded.
         # CURRENT_TIMESTAMP is naive UTC with one-second resolution.

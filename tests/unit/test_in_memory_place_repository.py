@@ -253,3 +253,14 @@ def test_update_rejects_a_non_enum_category_rather_than_storing_it() -> None:
     unchanged = repository.get(stored.id)
     assert unchanged is not None
     assert unchanged.category is PlaceCategory.FUEL
+
+
+def test_add_rejects_a_non_enum_category_rather_than_storing_it() -> None:
+    # Storing the raw string would leave a Place whose category is not a
+    # PlaceCategory, poisoning every later read of that place.
+    repository = InMemoryPlaceRepository()
+
+    with pytest.raises(AttributeError):
+        repository.add(make_place(category="fuel"))  # type: ignore[arg-type]
+
+    assert repository.search() == []
