@@ -60,6 +60,9 @@ class InMemoryUserRepository:
     def search_count(self, user_id: int) -> int:
         return sum(1 for logged_user_id, _ in self._searches if logged_user_id == user_id)
 
+    def total_searches(self) -> int:
+        return len(self._searches)
+
     def top_searches(self, limit: int = 10) -> list[tuple[str, int]]:
         counts = Counter(query for _, query in self._searches)
         # Ties break on the query text, the same ORDER BY the SQL uses, so a

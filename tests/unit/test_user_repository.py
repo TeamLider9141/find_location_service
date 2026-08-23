@@ -109,6 +109,13 @@ def test_searches_are_counted_per_user(repository) -> None:
     assert repository.search_count(42) == 2
 
 
+def test_total_searches_counts_every_user(repository) -> None:
+    repository.record_search(1, "газпром")
+    repository.record_search(2, "кафе")
+
+    assert repository.total_searches() == 2
+
+
 def test_top_searches_rank_by_repetition(repository) -> None:
     for _ in range(3):
         repository.record_search(1, "газпром")

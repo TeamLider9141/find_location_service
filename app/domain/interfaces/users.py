@@ -31,5 +31,8 @@ class UserRepository(Protocol):
     def search_count(self, user_id: int) -> int:
         """Return how many searches this user has run."""
 
+    def total_searches(self) -> int:
+        """Return how many searches every user has run together."""
+
     def top_searches(self, limit: int = 10) -> list[tuple[str, int]]:
         """Return the most repeated queries, most frequent first."""

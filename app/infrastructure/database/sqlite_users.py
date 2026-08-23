@@ -91,6 +91,12 @@ class SQLiteUserRepository:
 
         return int(row["total"])
 
+    def total_searches(self) -> int:
+        with closing(self._connect()) as connection:
+            row = connection.execute("SELECT COUNT(*) AS total FROM search_log").fetchone()
+
+        return int(row["total"])
+
     def top_searches(self, limit: int = 10) -> list[tuple[str, int]]:
         with closing(self._connect()) as connection:
             rows = connection.execute(
