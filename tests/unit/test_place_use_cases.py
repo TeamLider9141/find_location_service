@@ -131,9 +131,12 @@ def test_find_places_matches_name_or_category() -> None:
 def test_find_places_default_limit_is_ten() -> None:
     # A one-element result list can't tell a correct limit and ordering from a
     # hardcoded, swapped, or reversed one, so this seeds more than a page.
+    # Inserted in reverse so insertion order (and id order) is the opposite of
+    # name order — a test that inserted ascending couldn't tell "sorted by
+    # name" from "sorted by id", since both would produce the same sequence.
     repository = InMemoryPlaceRepository()
     add = AddPlaceUseCase(repository)
-    for index in range(12):
+    for index in reversed(range(12)):
         add.execute(
             user_id=42,
             name=f"АЗС {index:02d}",
@@ -172,6 +175,31 @@ def test_nearby_places_returns_closest_first() -> None:
     )
 
     assert [place.name for place in results] == ["Ближе", "Дальше"]
+
+
+def test_nearby_places_default_limit_is_ten() -> None:
+    # A two-place seed can't tell a correct default limit from one hardcoded
+    # smaller, or one left unbounded, so this seeds more than a page at
+    # distinct, increasing distances — the note carries the intended rank so
+    # the assertion pins both the count and the closest-first ordering.
+    repository = InMemoryPlaceRepository()
+    add = AddPlaceUseCase(repository)
+    query_point = Coordinates(latitude=55.75, longitude=37.61)
+    for index in range(12):
+        add.execute(
+            user_id=42,
+            name=f"АЗС {index:02d}",
+            category=PlaceCategory.FUEL,
+            coordinates=_north_by_meters(query_point, 100 * (index + 1)),
+            note=str(index),
+        )
+    use_case = NearbyPlacesUseCase(repository)
+
+    default_results = use_case.execute(query_point, radius_meters=5_000)
+    limited_results = use_case.execute(query_point, radius_meters=5_000, limit=3)
+
+    assert [place.note for place in default_results] == [str(i) for i in range(10)]
+    assert [place.note for place in limited_results] == [str(i) for i in range(3)]
 
 
 def test_nearby_places_filters_by_category() -> None:
