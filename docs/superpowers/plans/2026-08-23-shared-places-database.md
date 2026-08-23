@@ -1633,7 +1633,7 @@ Expected: PASS (5 passed)
 - [ ] **Step 5: Run the whole suite**
 
 Run: `python -m pytest -q`
-Expected: **130 passed, 1 skipped** (125 after Task 10 plus the 5 above). The old bot is
+Expected: **134 passed, 1 skipped** (129 after Task 10 plus the 5 above). The old bot is
 untouched.
 
 - [ ] **Step 6: Commit**
@@ -2061,7 +2061,7 @@ Expected: PASS (12 passed)
 - [ ] **Step 5: Run the whole suite**
 
 Run: `python -m pytest -q`
-Expected: **142 passed, 1 skipped** (130 after Task 11, plus 6 from Task 12 and the 6 above)
+Expected: **146 passed, 1 skipped** (134 after Task 11, plus 6 from Task 12 and the 6 above)
 
 - [ ] **Step 6: Commit**
 
