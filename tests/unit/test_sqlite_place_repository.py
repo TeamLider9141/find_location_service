@@ -317,3 +317,47 @@ def test_find_duplicates_matches_across_alphabets(
     )
 
     assert [place.name for place in duplicates] == ["Газпром"]
+
+
+def test_find_duplicates_matches_a_contained_name(
+    repository: SQLitePlaceRepository,
+) -> None:
+    # The stored name is the longer one this time — matching runs both ways.
+    repository.add(make_place(name="Газпром 24", latitude=55.7500, longitude=37.6100))
+
+    duplicates = repository.find_duplicates(
+        name="Газпром",
+        coordinates=Coordinates(latitude=55.7500, longitude=37.6100),
+        radius_meters=200,
+    )
+
+    assert [place.name for place in duplicates] == ["Газпром 24"]
+
+
+def test_find_duplicates_ignores_a_blank_query(
+    repository: SQLitePlaceRepository,
+) -> None:
+    repository.add(make_place(name="Газпром", latitude=55.7500, longitude=37.6100))
+
+    duplicates = repository.find_duplicates(
+        name="   ",
+        coordinates=Coordinates(latitude=55.7500, longitude=37.6100),
+        radius_meters=200,
+    )
+
+    assert duplicates == []
+
+
+def test_find_duplicates_ignores_a_stored_blank_name(
+    repository: SQLitePlaceRepository,
+) -> None:
+    # One row with a blank name must not report itself as everyone's duplicate.
+    repository.add(make_place(name="   ", latitude=55.7500, longitude=37.6100))
+
+    duplicates = repository.find_duplicates(
+        name="Шиномонтаж",
+        coordinates=Coordinates(latitude=55.7500, longitude=37.6100),
+        radius_meters=200,
+    )
+
+    assert duplicates == []

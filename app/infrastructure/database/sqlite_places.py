@@ -157,7 +157,8 @@ class SQLitePlaceRepository:
         return [
             place
             for place in candidates
-            if _names_overlap(normalized_name, normalize_name(place.name))
+            if (stored_name := normalize_name(place.name))
+            and _names_overlap(normalized_name, stored_name)
         ]
 
     def _initialize(self) -> None:
@@ -202,6 +203,9 @@ def _escape_like(value: str) -> str:
     return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
 
+# Only the 50 nearest candidates get name-checked. nearby() sorts by distance
+# first, so anything dropped is farther away than 50 other places inside the
+# radius — a real duplicate is almost never that far down the list.
 _DUPLICATE_SCAN_LIMIT = 50
 
 
