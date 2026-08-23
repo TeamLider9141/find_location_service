@@ -1633,7 +1633,8 @@ Expected: PASS (5 passed)
 - [ ] **Step 5: Run the whole suite**
 
 Run: `python -m pytest -q`
-Expected: **118 passed, 1 skipped** (82 baseline + 36 new). The old bot is untouched.
+Expected: **130 passed, 1 skipped** (125 after Task 10 plus the 5 above). The old bot is
+untouched.
 
 - [ ] **Step 6: Commit**
 
@@ -1959,6 +1960,21 @@ def test_update_place_by_another_user_returns_none() -> None:
     assert updated is None
 
 
+def test_update_place_rejects_a_blank_name() -> None:
+    repository = InMemoryPlaceRepository()
+    stored = _seed(repository)
+
+    try:
+        UpdatePlaceUseCase(repository).execute(
+            place_id=stored.id,
+            user_id=42,
+            name="   ",
+        )
+    except ValueError:
+        return
+    raise AssertionError("blank name must raise ValueError")
+
+
 def test_delete_place_by_the_author_succeeds() -> None:
     repository = InMemoryPlaceRepository()
     stored = _seed(repository)
@@ -2011,12 +2027,21 @@ class UpdatePlaceUseCase:
         category: PlaceCategory | None = None,
         note: str | None = None,
     ) -> Place | None:
+        cleaned_name = name
+        if name is not None:
+            # Same rule as adding one: a place has to keep a name other drivers
+            # can search for. Without this a rename could blank the name, and a
+            # blank name is the one case find_duplicates has to defend against.
+            cleaned_name = name.strip()
+            if not cleaned_name:
+                raise ValueError("name must not be blank")
+
         return self._repository.update(
             place_id=place_id,
             user_id=user_id,
-            name=name,
+            name=cleaned_name,
             category=category,
-            note=note,
+            note=note.strip() if note is not None else None,
         )
 
 
@@ -2031,12 +2056,12 @@ class DeletePlaceUseCase:
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `python -m pytest tests/unit/test_place_use_cases.py -v`
-Expected: PASS (11 passed)
+Expected: PASS (12 passed)
 
 - [ ] **Step 5: Run the whole suite**
 
 Run: `python -m pytest -q`
-Expected: **129 passed, 1 skipped**
+Expected: **142 passed, 1 skipped** (130 after Task 11, plus 6 from Task 12 and the 6 above)
 
 - [ ] **Step 6: Commit**
 
