@@ -33,7 +33,12 @@ class AddPlaceUseCase:
                 category=category,
                 coordinates=coordinates,
                 note=note.strip(),
-                created_at=datetime.now(timezone.utc),
+                # Both repositories stamp their own CURRENT_TIMESTAMP and discard
+                # whatever we pass here, so this value is never read back. It is
+                # naive UTC — not timezone-aware — because that is what every
+                # caller actually receives; the field has no default, so a value
+                # still has to be supplied.
+                created_at=datetime.now(timezone.utc).replace(tzinfo=None),
             )
         )
 
