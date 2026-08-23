@@ -178,3 +178,15 @@ def test_add_stamps_created_at_instead_of_trusting_the_caller() -> None:
 
     assert stored.created_at != datetime(2026, 1, 1)
     assert stored.created_at.tzinfo is None
+
+
+def test_update_writes_a_blank_name_rather_than_ignoring_it() -> None:
+    # "" means "set the name to empty", the same way note="" clears the note.
+    # Rejecting a blank name is the use case layer's job, not the repository's.
+    repository = InMemoryPlaceRepository()
+    stored = repository.add(make_place(name="Газпром", user_id=42))
+
+    updated = repository.update(stored.id, user_id=42, name="")
+
+    assert updated is not None
+    assert updated.name == ""
