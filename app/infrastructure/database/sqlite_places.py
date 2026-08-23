@@ -188,13 +188,13 @@ class SQLitePlaceRepository:
             return self._get_owned(place_id, user_id)
 
         parameters.extend([place_id, user_id])
+        # The author check rides in the WHERE clause, not a separate read then
+        # write, so no concurrent request can slip between a check and a write.
+        # delete() and _get_owned() do the same.
         with self._connect() as connection:
             cursor = connection.execute(
                 f"""
                 UPDATE places SET {', '.join(assignments)}
-                -- ownership lives in this one statement's WHERE, not a
-                -- separate read then write, so nothing can change the owner
-                -- in between the two
                 WHERE id = ? AND added_by_user_id = ?
                 """,
                 parameters,
@@ -215,10 +215,16 @@ class SQLitePlaceRepository:
             return cursor.rowcount > 0
 
     def _get_owned(self, place_id: int, user_id: int) -> Place | None:
-        place = self.get(place_id)
-        if place is None or place.added_by_user_id != user_id:
-            return None
-        return place
+        with self._connect() as connection:
+            row = connection.execute(
+                f"""
+                SELECT {_COLUMNS} FROM places
+                WHERE id = ? AND added_by_user_id = ?
+                """,
+                (place_id, user_id),
+            ).fetchone()
+
+        return _map_row(row) if row is not None else None
 
     def _initialize(self) -> None:
         with self._connect() as connection:

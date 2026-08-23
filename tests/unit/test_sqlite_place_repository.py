@@ -430,3 +430,38 @@ def test_delete_by_another_user_returns_false(
 
     assert repository.delete(stored.id, user_id=7) is False
     assert repository.get(stored.id) is not None
+
+
+def test_update_with_no_fields_returns_the_place_to_its_author(
+    repository: SQLitePlaceRepository,
+) -> None:
+    stored = repository.add(make_place(name="Газпром", user_id=42))
+
+    assert repository.update(stored.id, user_id=42) == stored
+
+
+def test_update_with_no_fields_by_another_user_returns_none(
+    repository: SQLitePlaceRepository,
+) -> None:
+    stored = repository.add(make_place(user_id=42))
+
+    assert repository.update(stored.id, user_id=7) is None
+
+
+def test_update_with_no_fields_for_a_missing_place_returns_none(
+    repository: SQLitePlaceRepository,
+) -> None:
+    assert repository.update(999, user_id=42) is None
+
+
+def test_update_writes_a_blank_name_rather_than_ignoring_it(
+    repository: SQLitePlaceRepository,
+) -> None:
+    # "" means "set the name to empty", the same way note="" clears the note.
+    # Rejecting a blank name is the use case layer's job, not the repository's.
+    stored = repository.add(make_place(name="Газпром", user_id=42))
+
+    updated = repository.update(stored.id, user_id=42, name="")
+
+    assert updated is not None
+    assert updated.name == ""
