@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 
 from app.application.use_cases.admin import AdminOverview, UserDetail, UsersPage
 from app.domain.entities.bot_user import BotUser
@@ -121,5 +121,12 @@ def _author_label(full_name: str | None, username: str | None, user_id: int) -> 
     return f"{name} (@{username})" if username else name
 
 
+# Uzbekistan keeps no daylight saving, so a fixed offset is exact year-round.
+TASHKENT = timezone(timedelta(hours=5))
+
+
 def _format_stamp(value: datetime) -> str:
-    return value.strftime("%Y-%m-%d %H:%M")
+    # Stored in UTC — SQLite's CURRENT_TIMESTAMP and the in-memory clock alike —
+    # and shown as Tashkent wall-clock time, which is what the admin's watch says.
+    aware = value.replace(tzinfo=timezone.utc) if value.tzinfo is None else value
+    return aware.astimezone(TASHKENT).strftime("%Y-%m-%d %H:%M")

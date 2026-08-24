@@ -143,6 +143,17 @@ def test_a_user_detail_reports_activity_and_places() -> None:
     assert "9" in text
 
 
+def test_activity_stamps_are_shown_in_tashkent_time() -> None:
+    # Stored in UTC; the admin reads the time their own watch shows. The STAMP
+    # above is 14:05 UTC, which is 19:05 in Tashkent.
+    detail = UserDetail(user=make_user(), places=[], searches=0)
+
+    text = format_user_detail(detail)
+
+    assert "19:05" in text
+    assert "14:05" not in text
+
+
 def test_a_user_detail_links_every_place_to_the_map() -> None:
     # The admin checks a suspicious entry by opening it on the map, not by
     # reading raw coordinates.
