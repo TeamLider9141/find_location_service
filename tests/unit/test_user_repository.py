@@ -96,6 +96,18 @@ def test_list_page_walks_without_repeating(repository) -> None:
     assert {user.id for user in first}.isdisjoint({user.id for user in second})
 
 
+def test_excluded_users_are_missing_from_the_page_and_the_total(repository) -> None:
+    # The ordinary admin rung is not shown the super admins — not their row,
+    # not their count.
+    for user_id in (1, 2, 3):
+        repository.record_seen(user_id, full_name=f"User {user_id}", username=None)
+
+    total, page = repository.list_page(offset=0, limit=10, exclude_ids=(2,))
+
+    assert total == 2
+    assert {user.id for user in page} == {1, 3}
+
+
 def test_list_page_past_the_end_is_empty(repository) -> None:
     repository.record_seen(1, full_name="A", username=None)
 

@@ -53,19 +53,28 @@ class SQLiteUserRepository:
 
         return int(row["total"])
 
-    def list_page(self, offset: int, limit: int) -> tuple[int, list[BotUser]]:
+    def list_page(
+        self, offset: int, limit: int, exclude_ids: tuple[int, ...] = ()
+    ) -> tuple[int, list[BotUser]]:
+        # Excluded in SQL so the total and the page agree on who exists;
+        # filtering rows after LIMIT would leave short pages instead.
+        placeholders = ",".join("?" * len(exclude_ids))
+        where = f"WHERE id NOT IN ({placeholders})" if exclude_ids else ""
         with closing(self._connect()) as connection:
             total = int(
-                connection.execute("SELECT COUNT(*) AS total FROM users").fetchone()["total"]
+                connection.execute(
+                    f"SELECT COUNT(*) AS total FROM users {where}", exclude_ids
+                ).fetchone()["total"]
             )
             rows = connection.execute(
-                """
+                f"""
                 SELECT id, full_name, username, first_seen_at, last_seen_at
                 FROM users
+                {where}
                 ORDER BY last_seen_at DESC, id DESC
                 LIMIT ? OFFSET ?
                 """,
-                (max(limit, 0), max(offset, 0)),
+                (*exclude_ids, max(limit, 0), max(offset, 0)),
             ).fetchall()
 
         return total, [_map_user(row) for row in rows]

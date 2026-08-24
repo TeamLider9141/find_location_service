@@ -39,9 +39,11 @@ class InMemoryUserRepository:
     def count(self) -> int:
         return len(self._users)
 
-    def list_page(self, offset: int, limit: int) -> tuple[int, list[BotUser]]:
+    def list_page(
+        self, offset: int, limit: int, exclude_ids: tuple[int, ...] = ()
+    ) -> tuple[int, list[BotUser]]:
         ordered = sorted(
-            self._users.values(),
+            (user for user in self._users.values() if user.id not in exclude_ids),
             key=lambda user: (user.last_seen_at, user.id),
             reverse=True,
         )

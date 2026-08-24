@@ -22,8 +22,14 @@ class UserRepository(Protocol):
     def count(self) -> int:
         """Return how many distinct users the bot has seen."""
 
-    def list_page(self, offset: int, limit: int) -> tuple[int, list[BotUser]]:
-        """Return the total user count and one page, most recently active first."""
+    def list_page(
+        self, offset: int, limit: int, exclude_ids: tuple[int, ...] = ()
+    ) -> tuple[int, list[BotUser]]:
+        """Return the total user count and one page, most recently active first.
+
+        ``exclude_ids`` hides those users from the page and the total both —
+        the ordinary admin rung is not shown the super admins.
+        """
 
     def all_ids(self) -> list[int]:
         """Return every user id — the broadcast recipient list."""

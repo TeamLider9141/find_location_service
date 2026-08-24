@@ -119,6 +119,7 @@ async def handle_admin_stats(
 async def handle_admin_users(
     callback_query: CallbackQuery,
     admin_ids: tuple[int, ...],
+    super_admin_ids: tuple[int, ...],
     list_users_page: ListUsersPageUseCase,
 ) -> None:
     message = await _open(callback_query, admin_ids)
@@ -130,8 +131,13 @@ async def handle_admin_users(
         await callback_query.answer(INVALID_SELECTION_MESSAGE)
         return
 
+    # The ordinary rung is not shown the super admins at all — not their row,
+    # not their count.
+    hidden = () if is_admin(callback_query, super_admin_ids) else super_admin_ids
     try:
-        page = list_users_page.execute(page=page_number, page_size=USERS_PAGE_SIZE)
+        page = list_users_page.execute(
+            page=page_number, page_size=USERS_PAGE_SIZE, exclude_ids=hidden
+        )
     except sqlite3.Error as error:
         report_service_error(error, "admin user list")
         await message.answer(DATABASE_ERROR_MESSAGE)
@@ -146,6 +152,7 @@ async def handle_admin_users(
 async def handle_admin_user_detail(
     callback_query: CallbackQuery,
     admin_ids: tuple[int, ...],
+    super_admin_ids: tuple[int, ...],
     user_detail: GetUserDetailUseCase,
 ) -> None:
     message = await _open(callback_query, admin_ids)
@@ -155,6 +162,12 @@ async def handle_admin_user_detail(
     user_id = _parse_int(callback_query.data, prefix="admin:user:")
     if user_id is None:
         await callback_query.answer(INVALID_SELECTION_MESSAGE)
+        return
+
+    # The list hides super admins from the ordinary rung, but the callback is
+    # guessable, so the detail view checks again.
+    if not _may_touch(callback_query, user_id, super_admin_ids):
+        await callback_query.answer(SUPER_ADMIN_ONLY_MESSAGE, show_alert=True)
         return
 
     try:
@@ -269,25 +282,32 @@ async def handle_place_delete_cancel(
 async def handle_allow_add(
     callback_query: CallbackQuery,
     admin_ids: tuple[int, ...],
+    super_admin_ids: tuple[int, ...],
     decide_add_access: DecideAddAccessUseCase,
     bot: Bot,
 ) -> None:
-    await _decide_add_access(callback_query, admin_ids, decide_add_access, bot, allow=True)
+    await _decide_add_access(
+        callback_query, admin_ids, super_admin_ids, decide_add_access, bot, allow=True
+    )
 
 
 @router.callback_query(F.data.startswith("admin:deny_add:"))
 async def handle_deny_add(
     callback_query: CallbackQuery,
     admin_ids: tuple[int, ...],
+    super_admin_ids: tuple[int, ...],
     decide_add_access: DecideAddAccessUseCase,
     bot: Bot,
 ) -> None:
-    await _decide_add_access(callback_query, admin_ids, decide_add_access, bot, allow=False)
+    await _decide_add_access(
+        callback_query, admin_ids, super_admin_ids, decide_add_access, bot, allow=False
+    )
 
 
 async def _decide_add_access(
     callback_query: CallbackQuery,
     admin_ids: tuple[int, ...],
+    super_admin_ids: tuple[int, ...],
     decide_add_access: DecideAddAccessUseCase,
     bot: Bot,
     allow: bool,
@@ -300,6 +320,10 @@ async def _decide_add_access(
     user_id = _parse_int(callback_query.data, prefix=prefix)
     if user_id is None:
         await callback_query.answer(INVALID_SELECTION_MESSAGE)
+        return
+
+    if not _may_touch(callback_query, user_id, super_admin_ids):
+        await callback_query.answer(SUPER_ADMIN_ONLY_MESSAGE, show_alert=True)
         return
 
     try:
@@ -327,6 +351,7 @@ async def _decide_add_access(
 async def handle_revoke_add(
     callback_query: CallbackQuery,
     admin_ids: tuple[int, ...],
+    super_admin_ids: tuple[int, ...],
     revoke_add_access: RevokeAddAccessUseCase,
     bot: Bot,
 ) -> None:
@@ -342,6 +367,10 @@ async def handle_revoke_add(
     user_id = _parse_int(callback_query.data, prefix="admin:revoke_add:")
     if user_id is None:
         await callback_query.answer(INVALID_SELECTION_MESSAGE)
+        return
+
+    if not _may_touch(callback_query, user_id, super_admin_ids):
+        await callback_query.answer(SUPER_ADMIN_ONLY_MESSAGE, show_alert=True)
         return
 
     try:
@@ -516,6 +545,14 @@ async def _open(callback_query: CallbackQuery, admin_ids: tuple[int, ...]) -> Me
         return None
 
     return message
+
+
+def _may_touch(
+    callback_query: CallbackQuery, target_id: int, super_admin_ids: tuple[int, ...]
+) -> bool:
+    """A super admin's row — their detail, their permissions — is off limits
+    to the ordinary rung."""
+    return target_id not in super_admin_ids or is_admin(callback_query, super_admin_ids)
 
 
 async def _open_super(

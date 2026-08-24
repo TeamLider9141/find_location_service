@@ -256,7 +256,10 @@ async def test_the_user_list_is_paged(places, users) -> None:
     callback = FakeCallbackQuery("admin:users:1")
 
     await handle_admin_users(
-        callback, admin_ids=ADMIN_IDS, list_users_page=ListUsersPageUseCase(users, places)
+        callback,
+        admin_ids=ADMIN_IDS,
+        super_admin_ids=ADMIN_IDS,
+        list_users_page=ListUsersPageUseCase(users, places),
     )
 
     assert "Sahifa 2" in callback.texts[0]
@@ -266,7 +269,10 @@ async def test_a_forged_page_number_is_refused(places, users) -> None:
     callback = FakeCallbackQuery("admin:users:abc")
 
     await handle_admin_users(
-        callback, admin_ids=ADMIN_IDS, list_users_page=ListUsersPageUseCase(users, places)
+        callback,
+        admin_ids=ADMIN_IDS,
+        super_admin_ids=ADMIN_IDS,
+        list_users_page=ListUsersPageUseCase(users, places),
     )
 
     assert callback.alerts == [INVALID_SELECTION_MESSAGE]
@@ -278,7 +284,10 @@ async def test_a_user_detail_shows_their_places(places, users) -> None:
     callback = FakeCallbackQuery("admin:user:7")
 
     await handle_admin_user_detail(
-        callback, admin_ids=ADMIN_IDS, user_detail=GetUserDetailUseCase(users, places)
+        callback,
+        admin_ids=ADMIN_IDS,
+        super_admin_ids=ADMIN_IDS,
+        user_detail=GetUserDetailUseCase(users, places),
     )
 
     assert "Газпром" in callback.texts[0]
@@ -288,7 +297,10 @@ async def test_an_unknown_user_is_reported(places, users) -> None:
     callback = FakeCallbackQuery("admin:user:404")
 
     await handle_admin_user_detail(
-        callback, admin_ids=ADMIN_IDS, user_detail=GetUserDetailUseCase(users, places)
+        callback,
+        admin_ids=ADMIN_IDS,
+        super_admin_ids=ADMIN_IDS,
+        user_detail=GetUserDetailUseCase(users, places),
     )
 
     assert callback.alerts == [UNKNOWN_USER_MESSAGE]
@@ -585,7 +597,7 @@ async def test_allowing_add_access_tells_the_driver() -> None:
     bot = FakeBot()
     callback = FakeCallbackQuery("admin:allow_add:7")
 
-    await handle_allow_add(callback, ADMIN_IDS, DecideAddAccessUseCase(access), bot)
+    await handle_allow_add(callback, ADMIN_IDS, ADMIN_IDS, DecideAddAccessUseCase(access), bot)
 
     assert access.status(7) == AddAccessStatus.APPROVED
     assert bot.sent[0][0] == 7
@@ -598,7 +610,7 @@ async def test_refusing_add_access_tells_the_driver() -> None:
     bot = FakeBot()
     callback = FakeCallbackQuery("admin:deny_add:7")
 
-    await handle_deny_add(callback, ADMIN_IDS, DecideAddAccessUseCase(access), bot)
+    await handle_deny_add(callback, ADMIN_IDS, ADMIN_IDS, DecideAddAccessUseCase(access), bot)
 
     assert access.status(7) == AddAccessStatus.REJECTED
     assert bot.sent[0][0] == 7
@@ -610,7 +622,9 @@ async def test_a_stranger_cannot_hand_out_add_access() -> None:
     access = InMemoryAddAccessRepository()
     callback = FakeCallbackQuery("admin:allow_add:7", user_id=STRANGER_ID)
 
-    await handle_allow_add(callback, ADMIN_IDS, DecideAddAccessUseCase(access), FakeBot())
+    await handle_allow_add(
+        callback, ADMIN_IDS, ADMIN_IDS, DecideAddAccessUseCase(access), FakeBot()
+    )
 
     assert access.status(7) is None
     assert callback.alerts == [NOT_ADMIN_MESSAGE]
@@ -623,7 +637,7 @@ async def test_a_blocked_driver_does_not_undo_the_decision() -> None:
     bot = FakeBot(blocked={7})
     callback = FakeCallbackQuery("admin:allow_add:7")
 
-    await handle_allow_add(callback, ADMIN_IDS, DecideAddAccessUseCase(access), bot)
+    await handle_allow_add(callback, ADMIN_IDS, ADMIN_IDS, DecideAddAccessUseCase(access), bot)
 
     assert access.status(7) == AddAccessStatus.APPROVED
     assert callback.alerts == [None]
@@ -634,7 +648,9 @@ async def test_a_garbled_add_access_id_is_refused() -> None:
     access = InMemoryAddAccessRepository()
     callback = FakeCallbackQuery("admin:allow_add:abc")
 
-    await handle_allow_add(callback, ADMIN_IDS, DecideAddAccessUseCase(access), FakeBot())
+    await handle_allow_add(
+        callback, ADMIN_IDS, ADMIN_IDS, DecideAddAccessUseCase(access), FakeBot()
+    )
 
     assert callback.alerts == [INVALID_SELECTION_MESSAGE]
 
@@ -704,7 +720,9 @@ async def test_an_ordinary_admin_can_hand_out_add_access() -> None:
     access.set_status(7, AddAccessStatus.PENDING)
     callback = FakeCallbackQuery("admin:allow_add:7", user_id=ORDINARY_ADMIN_ID)
 
-    await handle_allow_add(callback, BOTH_RUNGS, DecideAddAccessUseCase(access), FakeBot())
+    await handle_allow_add(
+        callback, BOTH_RUNGS, ADMIN_IDS, DecideAddAccessUseCase(access), FakeBot()
+    )
 
     assert access.status(7) == AddAccessStatus.APPROVED
 
@@ -718,7 +736,7 @@ async def test_revoking_returns_the_driver_to_never_asked() -> None:
     bot = FakeBot()
     callback = FakeCallbackQuery("admin:revoke_add:7")
 
-    await handle_revoke_add(callback, ADMIN_IDS, RevokeAddAccessUseCase(access), bot)
+    await handle_revoke_add(callback, ADMIN_IDS, ADMIN_IDS, RevokeAddAccessUseCase(access), bot)
 
     assert access.status(7) is None
     assert bot.sent[0][0] == 7
@@ -730,7 +748,9 @@ async def test_an_ordinary_admin_can_revoke_too() -> None:
     access.set_status(7, AddAccessStatus.APPROVED)
     callback = FakeCallbackQuery("admin:revoke_add:7", user_id=ORDINARY_ADMIN_ID)
 
-    await handle_revoke_add(callback, BOTH_RUNGS, RevokeAddAccessUseCase(access), FakeBot())
+    await handle_revoke_add(
+        callback, BOTH_RUNGS, ADMIN_IDS, RevokeAddAccessUseCase(access), FakeBot()
+    )
 
     assert access.status(7) is None
 
@@ -740,7 +760,9 @@ async def test_a_stranger_cannot_revoke() -> None:
     access.set_status(7, AddAccessStatus.APPROVED)
     callback = FakeCallbackQuery("admin:revoke_add:7", user_id=STRANGER_ID)
 
-    await handle_revoke_add(callback, ADMIN_IDS, RevokeAddAccessUseCase(access), FakeBot())
+    await handle_revoke_add(
+        callback, ADMIN_IDS, ADMIN_IDS, RevokeAddAccessUseCase(access), FakeBot()
+    )
 
     assert access.status(7) == AddAccessStatus.APPROVED
     assert callback.alerts == [NOT_ADMIN_MESSAGE]
@@ -752,8 +774,99 @@ async def test_a_blocked_driver_does_not_undo_the_revoke() -> None:
     callback = FakeCallbackQuery("admin:revoke_add:7")
 
     await handle_revoke_add(
-        callback, ADMIN_IDS, RevokeAddAccessUseCase(access), FakeBot(blocked={7})
+        callback, ADMIN_IDS, ADMIN_IDS, RevokeAddAccessUseCase(access), FakeBot(blocked={7})
     )
 
     assert access.status(7) is None
     assert callback.alerts == [None]
+
+
+# --- what the ordinary rung may not see or touch ----------------------------
+
+
+async def test_the_ordinary_rung_does_not_see_super_admins_in_the_list(places, users) -> None:
+    users.record_seen(7, full_name="Haydovchi", username=None)
+    users.record_seen(ADMIN_ID, full_name="Super", username=None)
+    callback = FakeCallbackQuery("admin:users:0", user_id=ORDINARY_ADMIN_ID)
+
+    await handle_admin_users(
+        callback,
+        admin_ids=BOTH_RUNGS,
+        super_admin_ids=ADMIN_IDS,
+        list_users_page=ListUsersPageUseCase(users, places),
+    )
+
+    assert "Haydovchi" in callback.texts[0]
+    assert "Super" not in callback.texts[0]
+    assert "1 ta" in callback.texts[0]
+
+
+async def test_a_super_admin_still_sees_everyone(places, users) -> None:
+    users.record_seen(7, full_name="Haydovchi", username=None)
+    users.record_seen(ADMIN_ID, full_name="Super", username=None)
+    callback = FakeCallbackQuery("admin:users:0", user_id=ADMIN_ID)
+
+    await handle_admin_users(
+        callback,
+        admin_ids=BOTH_RUNGS,
+        super_admin_ids=ADMIN_IDS,
+        list_users_page=ListUsersPageUseCase(users, places),
+    )
+
+    assert "Haydovchi" in callback.texts[0]
+    assert "Super" in callback.texts[0]
+
+
+async def test_the_ordinary_rung_cannot_open_a_super_admins_detail(places, users) -> None:
+    # The list hides them, but the callback is guessable.
+    users.record_seen(ADMIN_ID, full_name="Super", username=None)
+    callback = FakeCallbackQuery(f"admin:user:{ADMIN_ID}", user_id=ORDINARY_ADMIN_ID)
+
+    await handle_admin_user_detail(
+        callback,
+        admin_ids=BOTH_RUNGS,
+        super_admin_ids=ADMIN_IDS,
+        user_detail=GetUserDetailUseCase(users, places),
+    )
+
+    assert callback.alerts == [SUPER_ADMIN_ONLY_MESSAGE]
+    assert callback.texts == []
+
+
+async def test_a_super_admin_opens_their_own_detail(places, users) -> None:
+    users.record_seen(ADMIN_ID, full_name="Super", username=None)
+    callback = FakeCallbackQuery(f"admin:user:{ADMIN_ID}", user_id=ADMIN_ID)
+
+    await handle_admin_user_detail(
+        callback,
+        admin_ids=BOTH_RUNGS,
+        super_admin_ids=ADMIN_IDS,
+        user_detail=GetUserDetailUseCase(users, places),
+    )
+
+    assert "Super" in callback.texts[0]
+
+
+async def test_the_ordinary_rung_cannot_touch_a_super_admins_permission() -> None:
+    access = InMemoryAddAccessRepository()
+    callback = FakeCallbackQuery(f"admin:allow_add:{ADMIN_ID}", user_id=ORDINARY_ADMIN_ID)
+
+    await handle_allow_add(
+        callback, BOTH_RUNGS, ADMIN_IDS, DecideAddAccessUseCase(access), FakeBot()
+    )
+
+    assert access.status(ADMIN_ID) is None
+    assert callback.alerts == [SUPER_ADMIN_ONLY_MESSAGE]
+
+
+async def test_the_ordinary_rung_cannot_revoke_a_super_admin() -> None:
+    access = InMemoryAddAccessRepository()
+    access.set_status(ADMIN_ID, AddAccessStatus.APPROVED)
+    callback = FakeCallbackQuery(f"admin:revoke_add:{ADMIN_ID}", user_id=ORDINARY_ADMIN_ID)
+
+    await handle_revoke_add(
+        callback, BOTH_RUNGS, ADMIN_IDS, RevokeAddAccessUseCase(access), FakeBot()
+    )
+
+    assert access.status(ADMIN_ID) == AddAccessStatus.APPROVED
+    assert callback.alerts == [SUPER_ADMIN_ONLY_MESSAGE]

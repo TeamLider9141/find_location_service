@@ -95,10 +95,14 @@ class ListUsersPageUseCase:
         self._users = users
         self._places = places
 
-    def execute(self, page: int, page_size: int) -> UsersPage:
+    def execute(
+        self, page: int, page_size: int, exclude_ids: tuple[int, ...] = ()
+    ) -> UsersPage:
         safe_page = max(page, 0)
         safe_size = max(page_size, 1)
-        total, users = self._users.list_page(offset=safe_page * safe_size, limit=safe_size)
+        total, users = self._users.list_page(
+            offset=safe_page * safe_size, limit=safe_size, exclude_ids=exclude_ids
+        )
 
         return UsersPage(
             total=total,

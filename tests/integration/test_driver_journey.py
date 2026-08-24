@@ -286,6 +286,7 @@ async def test_adding_opens_only_after_the_admins_blessing(journey: Journey) -> 
     await handle_allow_add(
         FakeCallbackQuery(f"admin:allow_add:{NEWCOMER}", user_id=ADMIN),
         (ADMIN,),
+        (ADMIN,),
         journey.decide_add_access,
         bot,
     )
