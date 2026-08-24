@@ -62,6 +62,9 @@ Settings are read from `.env`; environment variables override it when both are p
 A value that is unreadable or out of range is ignored and the default used instead — a
 mistyped throttle must not be a way to lock the bot shut.
 
+`scripts/env_cheklovlar.sh` writes the throttle block into an existing `.env`, with the
+notes in Uzbek. It is safe to run twice; it replaces the block rather than appending to it.
+
 ## Run
 
 ```bash
