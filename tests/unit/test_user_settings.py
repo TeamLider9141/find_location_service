@@ -8,12 +8,21 @@ from app.domain.value_objects.user_settings import (
 )
 
 
+def test_the_defaults_are_wide() -> None:
+    # On an intercity highway the next place is rarely close; a driver who
+    # finds nothing blames the bot, not their radius setting.
+    assert UserSettings().nearby_radius_meters == 50_000
+    assert UserSettings().result_limit == 15
+
+
 def test_a_step_widens_the_radius_by_one_notch() -> None:
-    assert UserSettings().stepped_radius(1).nearby_radius_meters == 15_000
+    narrowed = UserSettings(nearby_radius_meters=10_000)
+
+    assert narrowed.stepped_radius(1).nearby_radius_meters == 15_000
 
 
 def test_a_negative_step_narrows_it() -> None:
-    assert UserSettings().stepped_radius(-1).nearby_radius_meters == 5_000
+    assert UserSettings().stepped_radius(-1).nearby_radius_meters == 45_000
 
 
 def test_the_radius_stops_at_the_bounds() -> None:
@@ -26,8 +35,8 @@ def test_the_radius_stops_at_the_bounds() -> None:
 
 
 def test_a_step_changes_the_result_limit_by_one() -> None:
-    assert UserSettings().stepped_result_limit(1).result_limit == 11
-    assert UserSettings().stepped_result_limit(-1).result_limit == 9
+    assert UserSettings().stepped_result_limit(1).result_limit == 16
+    assert UserSettings().stepped_result_limit(-1).result_limit == 14
 
 
 def test_the_result_limit_stops_at_the_bounds() -> None:
@@ -39,7 +48,7 @@ def test_the_result_limit_stops_at_the_bounds() -> None:
 
 
 def test_stepping_leaves_the_other_setting_alone() -> None:
-    stepped = UserSettings(result_limit=3).stepped_radius(1)
+    stepped = UserSettings(result_limit=3, nearby_radius_meters=10_000).stepped_radius(1)
 
     assert stepped.result_limit == 3
     assert stepped.nearby_radius_meters == 10_000 + RADIUS_STEP_METERS

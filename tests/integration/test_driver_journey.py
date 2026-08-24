@@ -203,7 +203,10 @@ async def test_narrowing_the_radius_drops_the_far_place(journey: Journey) -> Non
     await journey.add("Газпром", "fuel", STATION)
     await journey.add("Кафе М5", "cafe", CAFE)
 
-    await handle_settings_update(FakeCallbackQuery("settings:radius:dec"), journey.settings)
+    for _ in range(9):  # 50 km, one notch at a time, down to 5 km
+        await handle_settings_update(
+            FakeCallbackQuery("settings:radius:dec"), journey.settings
+        )
     listed = replies(await journey.nearby(STATION))
 
     assert "Газпром" in listed

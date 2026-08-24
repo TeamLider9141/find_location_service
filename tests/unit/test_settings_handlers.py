@@ -37,8 +37,8 @@ async def test_settings_command_shows_default_radius_and_result_limit() -> None:
     await handle_settings(message, user_settings=store)
 
     answer = message.answers[0]
-    assert "10 km" in str(answer["text"])
-    assert "10 ta" in str(answer["text"])
+    assert "50 km" in str(answer["text"])
+    assert "15 ta" in str(answer["text"])
     callback_data = [row[0].callback_data for row in answer["reply_markup"].inline_keyboard]
     assert "settings:radius:inc" in callback_data
     assert "settings:limit:dec" in callback_data
@@ -48,15 +48,15 @@ async def test_settings_update_changes_radius_and_result_limit() -> None:
     store = InMemoryUserSettingsStore()
 
     await handle_settings_update(
-        FakeCallbackQuery("settings:radius:inc"),
+        FakeCallbackQuery("settings:radius:dec"),
         user_settings=store,
     )
     callback = FakeCallbackQuery("settings:limit:dec")
     await handle_settings_update(callback, user_settings=store)
 
     settings = store.get(user_id=42)
-    assert settings.nearby_radius_meters == 15_000
-    assert settings.result_limit == 9
+    assert settings.nearby_radius_meters == 45_000
+    assert settings.result_limit == 14
     assert "15 km" in str(callback.message.answers[0]["text"])
     assert "9 ta" in str(callback.message.answers[0]["text"])
     assert callback.alerts == [None]

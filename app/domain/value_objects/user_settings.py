@@ -11,8 +11,10 @@ MAX_RESULT_LIMIT = 20
 
 @dataclass(frozen=True)
 class UserSettings:
-    nearby_radius_meters: int = 10_000
-    result_limit: int = 10
+    # Wide by default: on an intercity highway the next place is rarely close,
+    # and a driver who finds nothing blames the bot, not their radius setting.
+    nearby_radius_meters: int = 50_000
+    result_limit: int = 15
 
     # Stepping lives here, not in the stores: every store would otherwise carry
     # its own copy of the bounds, and two copies eventually disagree.
