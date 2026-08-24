@@ -54,6 +54,8 @@ Settings are read from `.env`; environment variables override it when both are p
 | `THROTTLE_BURST` | Messages a driver may send back to back. Defaults to 5, minimum 1. |
 | `THROTTLE_REFILL_PER_SECOND` | Messages a second a driver earns back. Defaults to 1.0, must be above 0. |
 | `THROTTLE_WARNING_SECONDS` | Seconds between two throttle replies. Defaults to 10; 0 answers every dropped message. |
+| `THROTTLE_IDLE_SECONDS` | Seconds of silence before a driver is dropped from memory. Defaults to 300, must be above 0. |
+| `THROTTLE_PRUNE_INTERVAL_SECONDS` | How often that cleanup sweep runs. Defaults to 60. |
 
 A value that is unreadable or out of range is ignored and the default used instead — a
 mistyped throttle must not be a way to lock the bot shut.

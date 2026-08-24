@@ -43,11 +43,15 @@ class ThrottleMiddleware(BaseMiddleware):
         burst: int = BURST_SIZE,
         refill_per_second: float = REFILL_PER_SECOND,
         warning_seconds: float = WARNING_INTERVAL_SECONDS,
+        idle_seconds: float = IDLE_SECONDS,
+        prune_interval_seconds: float = PRUNE_INTERVAL_SECONDS,
         clock: Callable[[], float] = monotonic,
     ) -> None:
         self._burst = float(burst)
         self._refill_per_second = refill_per_second
         self._warning_seconds = warning_seconds
+        self._idle_seconds = idle_seconds
+        self._prune_interval_seconds = prune_interval_seconds
         self._clock = clock
         self._buckets: dict[int, _Bucket] = {}
         self._last_prune = clock()
@@ -100,12 +104,12 @@ class ThrottleMiddleware(BaseMiddleware):
             report_service_error(error, "throttle warning")
 
     def _prune(self, now: float) -> None:
-        if now - self._last_prune < PRUNE_INTERVAL_SECONDS:
+        if now - self._last_prune < self._prune_interval_seconds:
             return
 
         self._last_prune = now
         self._buckets = {
             user_id: bucket
             for user_id, bucket in self._buckets.items()
-            if now - bucket.last_seen < IDLE_SECONDS
+            if now - bucket.last_seen < self._idle_seconds
         }

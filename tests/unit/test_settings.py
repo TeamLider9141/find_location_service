@@ -3,6 +3,8 @@ from pathlib import Path
 from app.config.settings import Settings, get_settings
 from app.presentation.telegram.middlewares.throttling import (
     BURST_SIZE,
+    IDLE_SECONDS,
+    PRUNE_INTERVAL_SECONDS,
     REFILL_PER_SECOND,
     WARNING_INTERVAL_SECONDS,
 )
@@ -168,3 +170,28 @@ def test_warning_every_time_is_allowed() -> None:
     settings = Settings.from_sources(env={"THROTTLE_WARNING_SECONDS": "0"}, dotenv_path=None)
 
     assert settings.throttle_warning_seconds == 0.0
+
+
+def test_the_cleanup_timers_default_to_the_middleware_values() -> None:
+    settings = Settings.from_sources(env={}, dotenv_path=None)
+
+    assert settings.throttle_idle_seconds == IDLE_SECONDS
+    assert settings.throttle_prune_interval_seconds == PRUNE_INTERVAL_SECONDS
+
+
+def test_the_cleanup_timers_are_tuned_from_the_environment() -> None:
+    settings = Settings.from_sources(
+        env={"THROTTLE_IDLE_SECONDS": "600", "THROTTLE_PRUNE_INTERVAL_SECONDS": "120"},
+        dotenv_path=None,
+    )
+
+    assert settings.throttle_idle_seconds == 600.0
+    assert settings.throttle_prune_interval_seconds == 120.0
+
+
+def test_a_zero_idle_window_is_refused() -> None:
+    # Forgetting a driver the instant their message lands would hand them a full
+    # bucket on every message, which is the same as no rate limit at all.
+    settings = Settings.from_sources(env={"THROTTLE_IDLE_SECONDS": "0"}, dotenv_path=None)
+
+    assert settings.throttle_idle_seconds == IDLE_SECONDS

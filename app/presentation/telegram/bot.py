@@ -93,6 +93,8 @@ def create_throttle_middleware(settings: Settings) -> ThrottleMiddleware:
         burst=settings.throttle_burst,
         refill_per_second=settings.throttle_refill_per_second,
         warning_seconds=settings.throttle_warning_seconds,
+        idle_seconds=settings.throttle_idle_seconds,
+        prune_interval_seconds=settings.throttle_prune_interval_seconds,
     )
 
 

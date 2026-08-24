@@ -16,6 +16,8 @@ class Settings:
     throttle_burst: int = 5
     throttle_refill_per_second: float = 1.0
     throttle_warning_seconds: float = 10.0
+    throttle_idle_seconds: float = 300.0
+    throttle_prune_interval_seconds: float = 60.0
 
     @classmethod
     def from_env(cls, env: Mapping[str, str] = environ) -> "Settings":
@@ -46,6 +48,18 @@ class Settings:
             ),
             throttle_warning_seconds=_read_number(
                 values.get("THROTTLE_WARNING_SECONDS"), cls.throttle_warning_seconds, float
+            ),
+            throttle_idle_seconds=_read_number(
+                values.get("THROTTLE_IDLE_SECONDS"),
+                cls.throttle_idle_seconds,
+                float,
+                minimum=0,
+                inclusive=False,
+            ),
+            throttle_prune_interval_seconds=_read_number(
+                values.get("THROTTLE_PRUNE_INTERVAL_SECONDS"),
+                cls.throttle_prune_interval_seconds,
+                float,
             ),
         )
 
