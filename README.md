@@ -19,6 +19,9 @@ added it.
 - Admin panel — statistics, user list, per-user detail, top searches, moderation
   delete, broadcast. Reached with `/admin` or the 🛠 button, which only appears in
   the menu of an id listed in `ADMIN_IDS`
+- Per-driver rate limit: bursts of five messages pass, anything faster is dropped
+  with one warning
+- Every id in `ADMIN_IDS` is messaged when the bot starts, so a restart is not silent
 
 Six categories: restaurant, cafe, fuel, hotel, parking, car service.
 

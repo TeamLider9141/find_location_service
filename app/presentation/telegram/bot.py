@@ -28,6 +28,7 @@ from app.infrastructure.database.sqlite_users import SQLiteUserRepository
 from app.presentation.telegram.handlers import add_place, admin, find_place, my_places, start
 from app.presentation.telegram.handlers import settings as settings_handlers
 from app.presentation.telegram.handlers.settings import UserSettingsStore
+from app.presentation.telegram.middlewares.throttling import ThrottleMiddleware
 from app.presentation.telegram.middlewares.user_tracking import UserTrackingMiddleware
 
 
@@ -55,6 +56,10 @@ def create_dispatcher(
         broadcast_recipients=ListBroadcastRecipientsUseCase(users),
         admin_ids=admin_ids,
     )
+
+    # Throttling goes on first, so a flood is dropped before it reaches the
+    # database at all — including the tracking write below it.
+    dispatcher.message.outer_middleware(ThrottleMiddleware())
 
     # Outer middleware, on both update types: a driver who only taps buttons
     # still has to show up in the admin panel.

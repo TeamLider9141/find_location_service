@@ -11,6 +11,7 @@ from app.presentation.telegram.bot import (
     create_user_settings_store,
 )
 from app.presentation.telegram.commands import configure_commands
+from app.presentation.telegram.notifications import announce_startup
 from app.shared.logging import configure_logging
 
 
@@ -33,6 +34,7 @@ async def run_bot() -> int:
     )
     try:
         await configure_commands(bot, settings.admin_ids)
+        await announce_startup(bot, settings.admin_ids)
         await dispatcher.start_polling(bot)
     finally:
         await bot.session.close()

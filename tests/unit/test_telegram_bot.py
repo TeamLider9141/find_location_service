@@ -103,6 +103,14 @@ def test_every_visitor_is_recorded_before_a_handler_runs(
         assert "UserTrackingMiddleware" in names
 
 
+def test_a_flood_is_stopped_before_it_reaches_the_database(dispatcher: Dispatcher) -> None:
+    # Order is the point: throttling has to run before the tracking write, or a
+    # dropped message still costs a database round trip.
+    names = [type(middleware).__name__ for middleware in dispatcher.message.outer_middleware]
+
+    assert names.index("ThrottleMiddleware") < names.index("UserTrackingMiddleware")
+
+
 def test_the_settings_store_survives_a_restart(dispatcher: Dispatcher) -> None:
     # Handed in rather than built inside: an in-memory store would silently
     # reset every driver's radius on each deploy.
