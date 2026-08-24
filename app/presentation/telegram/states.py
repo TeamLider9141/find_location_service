@@ -15,3 +15,7 @@ class FindPlace(StatesGroup):
 
 class NearbyPlace(StatesGroup):
     location = State()
+
+
+class AdminBroadcast(StatesGroup):
+    message = State()

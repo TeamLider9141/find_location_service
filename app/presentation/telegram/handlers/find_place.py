@@ -5,6 +5,7 @@ from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
+from app.application.use_cases.admin import RecordSearchUseCase
 from app.application.use_cases.places import (
     FindPlacesUseCase,
     GetPlaceUseCase,
@@ -161,6 +162,7 @@ async def handle_text_query(
     message: Message,
     find_places: FindPlacesUseCase,
     user_settings: UserSettingsStore,
+    record_search: RecordSearchUseCase,
 ) -> None:
     query = (message.text or "").strip()
     user_id = user_id_of(message)
@@ -168,6 +170,13 @@ async def handle_text_query(
     # message would answer with the whole table rather than nothing.
     if not query or user_id is None:
         return
+
+    # Logged before the search runs: what drivers look for is worth knowing
+    # even when the database has no answer for them.
+    try:
+        record_search.execute(user_id, query)
+    except sqlite3.Error as error:
+        report_service_error(error, "record search")
 
     limit = user_settings.get(user_id).result_limit
     try:

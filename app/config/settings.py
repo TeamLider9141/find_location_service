@@ -8,6 +8,7 @@ from typing import Mapping
 class Settings:
     telegram_bot_token: str | None = None
     database_path: str = "data/find_location.sqlite3"
+    admin_ids: tuple[int, ...] = ()
 
     @classmethod
     def from_env(cls, env: Mapping[str, str] = environ) -> "Settings":
@@ -25,7 +26,23 @@ class Settings:
         return cls(
             telegram_bot_token=values.get("TELEGRAM_BOT_TOKEN") or None,
             database_path=values.get("DATABASE_PATH", cls.database_path),
+            admin_ids=_read_admin_ids(values.get("ADMIN_IDS", "")),
         )
+
+
+def _read_admin_ids(value: str) -> tuple[int, ...]:
+    """Parse ``ADMIN_IDS`` — a comma separated list of Telegram user ids.
+
+    An entry that is not a number is dropped rather than raising: a typo in
+    .env must not lock out the ids that are valid, and cannot widen access.
+    """
+    admin_ids: list[int] = []
+    for entry in value.split(","):
+        cleaned = entry.strip()
+        if cleaned.lstrip("-").isdigit():
+            admin_ids.append(int(cleaned))
+
+    return tuple(admin_ids)
 
 
 def _read_dotenv(path: Path | str | None) -> dict[str, str]:

@@ -16,6 +16,8 @@ added it.
 - Find places near your current location, sorted by distance
 - Manage the places you contributed — change category, delete
 - Per-user settings for search radius and result count
+- Admin panel (`/admin`): statistics, user list, per-user detail, top searches,
+  moderation delete, broadcast
 
 Six categories: restaurant, cafe, fuel, hotel, parking, car service.
 
@@ -27,7 +29,8 @@ Six categories: restaurant, cafe, fuel, hotel, parking, car service.
 - `app/presentation/telegram` — handlers, keyboards, formatters, FSM states
 
 Reads are global; writes are author-scoped. Anyone can look up any place, but only the
-driver who added it can change or delete it.
+driver who added it can change or delete it. Admins listed in `ADMIN_IDS` are the exception:
+they can delete any place, and they are the only ones who can open `/admin`.
 
 ## Setup
 
@@ -38,6 +41,12 @@ cp .env.example .env   # then fill in TELEGRAM_BOT_TOKEN
 ```
 
 Settings are read from `.env`; environment variables override it when both are present.
+
+| Variable | Meaning |
+| --- | --- |
+| `TELEGRAM_BOT_TOKEN` | Bot token from @BotFather. Required. |
+| `DATABASE_PATH` | SQLite file. Defaults to `data/find_location.sqlite3`. |
+| `ADMIN_IDS` | Comma separated Telegram user ids allowed into `/admin`. Empty means nobody. |
 
 ## Run
 

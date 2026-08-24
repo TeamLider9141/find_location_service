@@ -1,0 +1,108 @@
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+
+from app.application.use_cases.admin import UsersPage
+from app.domain.entities.place import Place
+
+USERS_PAGE_SIZE = 5
+
+
+def build_admin_menu_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="📊 Statistika", callback_data="admin:stats")],
+            [InlineKeyboardButton(text="👥 Foydalanuvchilar", callback_data="admin:users:0")],
+            [InlineKeyboardButton(text="🔎 Top qidiruvlar", callback_data="admin:searches")],
+            [InlineKeyboardButton(text="📢 Xabar yuborish", callback_data="admin:broadcast")],
+        ]
+    )
+
+
+def build_users_page_keyboard(page: UsersPage) -> InlineKeyboardMarkup:
+    rows = [
+        [
+            InlineKeyboardButton(
+                text=f"{row.user.full_name} — {row.places} ta joy",
+                callback_data=f"admin:user:{row.user.id}",
+            )
+        ]
+        for row in page.rows
+    ]
+
+    navigation: list[InlineKeyboardButton] = []
+    if page.page > 0:
+        navigation.append(
+            InlineKeyboardButton(text="⬅️", callback_data=f"admin:users:{page.page - 1}")
+        )
+    # Offer the next page only when rows remain behind this one, otherwise the
+    # arrow opens an empty list and the admin cannot tell it from a bug.
+    if (page.page + 1) * page.page_size < page.total:
+        navigation.append(
+            InlineKeyboardButton(text="➡️", callback_data=f"admin:users:{page.page + 1}")
+        )
+    if navigation:
+        rows.append(navigation)
+
+    rows.append([InlineKeyboardButton(text="⬅ Admin menyu", callback_data="admin:home")])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def build_user_detail_keyboard(places: list[Place], page: int = 0) -> InlineKeyboardMarkup:
+    rows = [
+        [
+            InlineKeyboardButton(
+                text=f"🗑 {place.name}",
+                callback_data=f"admin:place_delete:{place.id}",
+            )
+        ]
+        for place in places
+    ]
+    rows.append(
+        [InlineKeyboardButton(text="⬅ Ro'yxatga", callback_data=f"admin:users:{max(page, 0)}")]
+    )
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def build_admin_delete_confirmation_keyboard(place_id: int) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="✅ Ha, o'chir",
+                    callback_data=f"admin:place_delete_confirm:{place_id}",
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="Bekor qilish",
+                    callback_data="admin:place_delete_cancel",
+                )
+            ],
+        ]
+    )
+
+
+def build_broadcast_confirmation_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="📤 Hammaga yuborish",
+                    callback_data="admin:broadcast:send",
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="❌ Bekor qilish",
+                    callback_data="admin:broadcast:cancel",
+                )
+            ],
+        ]
+    )
+
+
+def build_back_to_menu_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="⬅ Admin menyu", callback_data="admin:home")]
+        ]
+    )

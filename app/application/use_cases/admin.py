@@ -128,6 +128,16 @@ class GetUserDetailUseCase:
         )
 
 
+class RecordSearchUseCase:
+    """Log what a driver searched for. Feeds the admin panel, nothing else."""
+
+    def __init__(self, users: UserRepository) -> None:
+        self._users = users
+
+    def execute(self, user_id: int, query: str) -> None:
+        self._users.record_search(user_id, query)
+
+
 class TopSearchesUseCase:
     def __init__(self, users: UserRepository) -> None:
         self._users = users

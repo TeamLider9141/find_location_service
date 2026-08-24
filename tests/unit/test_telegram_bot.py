@@ -4,17 +4,20 @@ from aiogram.fsm.storage.memory import MemoryStorage
 
 from app.config.settings import Settings
 from app.infrastructure.repositories.in_memory_places import InMemoryPlaceRepository
+from app.infrastructure.repositories.in_memory_users import InMemoryUserRepository
 from app.presentation.telegram.bot import create_bot, create_dispatcher
 
 # The handler routers are module-level singletons, and aiogram refuses to attach
 # one to a second dispatcher. So the whole file shares one dispatcher — which is
 # also how the bot runs: built once at startup.
 REPOSITORY = InMemoryPlaceRepository()
+USERS = InMemoryUserRepository()
+ADMIN_IDS = (99,)
 
 
 @pytest.fixture(scope="module")
 def dispatcher() -> Dispatcher:
-    return create_dispatcher(REPOSITORY)
+    return create_dispatcher(REPOSITORY, users=USERS, admin_ids=ADMIN_IDS)
 
 
 def test_create_bot_requires_telegram_token() -> None:
@@ -32,6 +35,14 @@ def test_dispatcher_injects_every_place_dependency(dispatcher: Dispatcher) -> No
         "update_place",
         "delete_place",
         "user_settings",
+        "record_search",
+        "admin_overview",
+        "list_users_page",
+        "user_detail",
+        "top_searches",
+        "delete_place_as_admin",
+        "broadcast_recipients",
+        "admin_ids",
     ):
         assert key in dispatcher.workflow_data
 
@@ -58,7 +69,7 @@ def test_find_place_router_is_registered_last(dispatcher: Dispatcher) -> None:
     names = [router.name for router in dispatcher.sub_routers]
 
     assert names[-1] == "find_place"
-    assert names == ["start", "settings", "add_place", "my_places", "find_place"]
+    assert names == ["start", "admin", "settings", "add_place", "my_places", "find_place"]
 
 
 def test_dispatcher_keeps_state_for_the_add_place_wizard(
@@ -67,3 +78,19 @@ def test_dispatcher_keeps_state_for_the_add_place_wizard(
     # The add-place flow spans five messages, so a dispatcher without storage
     # would lose the name before the coordinates ever arrived.
     assert isinstance(dispatcher.storage, MemoryStorage)
+
+
+def test_admin_ids_reach_the_handlers_that_guard_on_them(
+    dispatcher: Dispatcher,
+) -> None:
+    assert dispatcher.workflow_data["admin_ids"] == ADMIN_IDS
+
+
+def test_every_visitor_is_recorded_before_a_handler_runs(
+    dispatcher: Dispatcher,
+) -> None:
+    # Tracking has to sit on both update types: a driver who only ever taps
+    # buttons would otherwise never appear in the admin panel.
+    for observer in (dispatcher.message, dispatcher.callback_query):
+        names = [type(middleware).__name__ for middleware in observer.outer_middleware]
+        assert "UserTrackingMiddleware" in names

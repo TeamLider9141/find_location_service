@@ -7,6 +7,7 @@ from app.presentation.telegram.bot import (
     create_bot,
     create_dispatcher,
     create_place_repository,
+    create_user_repository,
 )
 from app.shared.logging import configure_logging
 
@@ -22,7 +23,11 @@ def main(argv: list[str] | None = None) -> int:
 async def run_bot() -> int:
     settings = get_settings()
     bot = create_bot(settings)
-    dispatcher = create_dispatcher(create_place_repository(settings))
+    dispatcher = create_dispatcher(
+        create_place_repository(settings),
+        users=create_user_repository(settings),
+        admin_ids=settings.admin_ids,
+    )
     try:
         await dispatcher.start_polling(bot)
     finally:

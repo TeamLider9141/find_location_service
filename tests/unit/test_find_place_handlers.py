@@ -4,6 +4,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.storage.base import StorageKey
 from aiogram.fsm.storage.memory import MemoryStorage
 
+from app.application.use_cases.admin import RecordSearchUseCase
 from app.application.use_cases.places import (
     AddPlaceUseCase,
     FindPlacesUseCase,
@@ -14,6 +15,7 @@ from app.domain.value_objects.category import PlaceCategory
 from app.domain.value_objects.coordinates import Coordinates
 from app.domain.value_objects.user_settings import UserSettings
 from app.infrastructure.repositories.in_memory_places import InMemoryPlaceRepository
+from app.infrastructure.repositories.in_memory_users import InMemoryUserRepository
 from app.presentation.telegram.handlers.find_place import (
     handle_category_browse,
     handle_find_start,
@@ -59,6 +61,11 @@ class FakeCallbackQuery:
 
     async def answer(self, text: str | None = None, **_: object) -> None:
         self.alerts.append(text)
+
+
+class ExplodingUsers:
+    def record_search(self, user_id: int, query: str) -> None:
+        raise sqlite3.OperationalError("database is locked")
 
 
 class FixedSettingsStore:
@@ -124,6 +131,7 @@ async def test_text_query_finds_a_place_across_alphabets() -> None:
         message,
         find_places=FindPlacesUseCase(repository),
         user_settings=InMemoryUserSettingsStore(),
+        record_search=RecordSearchUseCase(InMemoryUserRepository()),
     )
 
     assert "Газпром" in str(message.answers[0]["text"])
@@ -138,6 +146,7 @@ async def test_text_query_results_link_to_the_place_by_id() -> None:
         message,
         find_places=FindPlacesUseCase(repository),
         user_settings=InMemoryUserSettingsStore(),
+        record_search=RecordSearchUseCase(InMemoryUserRepository()),
     )
 
     keyboard = message.answers[0]["reply_markup"]
@@ -154,6 +163,7 @@ async def test_text_query_honours_the_result_limit() -> None:
         unlimited,
         find_places=FindPlacesUseCase(repository),
         user_settings=InMemoryUserSettingsStore(),
+        record_search=RecordSearchUseCase(InMemoryUserRepository()),
     )
     assert len(unlimited.answers[0]["reply_markup"].inline_keyboard) == 2
 
@@ -162,6 +172,7 @@ async def test_text_query_honours_the_result_limit() -> None:
         limited,
         find_places=FindPlacesUseCase(repository),
         user_settings=FixedSettingsStore(UserSettings(result_limit=1)),
+        record_search=RecordSearchUseCase(InMemoryUserRepository()),
     )
     assert len(limited.answers[0]["reply_markup"].inline_keyboard) == 1
 
@@ -203,6 +214,7 @@ async def test_text_query_with_no_match_invites_a_contribution() -> None:
         message,
         find_places=FindPlacesUseCase(repository),
         user_settings=InMemoryUserSettingsStore(),
+        record_search=RecordSearchUseCase(InMemoryUserRepository()),
     )
 
     assert "qo'shing" in str(message.answers[0]["text"])
@@ -217,6 +229,7 @@ async def test_a_blank_query_is_ignored_rather_than_dumping_the_database() -> No
         message,
         find_places=FindPlacesUseCase(repository),
         user_settings=InMemoryUserSettingsStore(),
+        record_search=RecordSearchUseCase(InMemoryUserRepository()),
     )
 
     assert message.answers == []
@@ -229,6 +242,7 @@ async def test_a_database_failure_during_search_tells_the_driver() -> None:
         message,
         find_places=FindPlacesUseCase(ExplodingRepository()),
         user_settings=InMemoryUserSettingsStore(),
+        record_search=RecordSearchUseCase(InMemoryUserRepository()),
     )
 
     assert "baza" in str(message.answers[0]["text"]).lower()
@@ -431,3 +445,45 @@ async def test_place_card_is_shown_to_whoever_asks() -> None:
     await handle_place_card(callback, get_place=GetPlaceUseCase(repository))
 
     assert "Газпром" in str(callback.message.answers[0]["text"])
+
+
+async def test_a_search_is_logged_for_the_admin_panel() -> None:
+    users = InMemoryUserRepository()
+    message = FakeMessage(text="Газпром")
+
+    await handle_text_query(
+        message,
+        find_places=FindPlacesUseCase(seeded_repository()),
+        user_settings=InMemoryUserSettingsStore(),
+        record_search=RecordSearchUseCase(users),
+    )
+
+    assert users.top_searches() == [("газпром", 1)]
+
+
+async def test_a_search_with_no_match_is_still_logged() -> None:
+    # What drivers fail to find is exactly what the admin needs to see.
+    users = InMemoryUserRepository()
+    message = FakeMessage(text="ничего")
+
+    await handle_text_query(
+        message,
+        find_places=FindPlacesUseCase(InMemoryPlaceRepository()),
+        user_settings=InMemoryUserSettingsStore(),
+        record_search=RecordSearchUseCase(users),
+    )
+
+    assert users.total_searches() == 1
+
+
+async def test_a_logging_failure_still_answers_the_driver() -> None:
+    message = FakeMessage(text="газпром")
+
+    await handle_text_query(
+        message,
+        find_places=FindPlacesUseCase(seeded_repository()),
+        user_settings=InMemoryUserSettingsStore(),
+        record_search=RecordSearchUseCase(ExplodingUsers()),
+    )
+
+    assert message.answers[0]["reply_markup"].inline_keyboard
