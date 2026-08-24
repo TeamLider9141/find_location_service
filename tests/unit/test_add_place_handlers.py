@@ -385,7 +385,7 @@ async def test_note_step_saves_the_place_and_clears_the_flow() -> None:
     state = await _state_at_note()
     message = FakeMessage(text="M5, 120 км")
 
-    await handle_note(message, state, add_place=AddPlaceUseCase(repository))
+    await handle_note(message, state, add_place=AddPlaceUseCase(repository), admin_ids=())
 
     stored = repository.search(name="газпром")
     assert len(stored) == 1
@@ -401,7 +401,7 @@ async def test_a_saved_place_is_shown_back_with_the_main_menu() -> None:
     state = await _state_at_note()
     message = FakeMessage(text="M5, 120 км")
 
-    await handle_note(message, state, add_place=AddPlaceUseCase(repository))
+    await handle_note(message, state, add_place=AddPlaceUseCase(repository), admin_ids=())
 
     text = str(message.answers[-1]["text"])
     assert "Газпром" in text
@@ -417,6 +417,7 @@ async def test_the_place_is_saved_at_the_coordinates_the_flow_collected() -> Non
         FakeMessage(text="M5"),
         state,
         add_place=AddPlaceUseCase(repository),
+        admin_ids=(),
     )
 
     stored = repository.search(name="газпром")[0]
@@ -429,7 +430,7 @@ async def test_skip_note_saves_the_place_without_a_note() -> None:
     state = await _state_at_note()
     message = FakeMessage(text="/skip")
 
-    await handle_skip_note(message, state, add_place=AddPlaceUseCase(repository))
+    await handle_skip_note(message, state, add_place=AddPlaceUseCase(repository), admin_ids=())
 
     stored = repository.search(name="газпром")
     assert stored[0].note == ""
@@ -445,7 +446,7 @@ async def test_a_half_finished_flow_does_not_save_a_broken_place() -> None:
     await state.update_data(name="Газпром", category=PlaceCategory.FUEL.value)
     message = FakeMessage(text="M5")
 
-    await handle_note(message, state, add_place=AddPlaceUseCase(repository))
+    await handle_note(message, state, add_place=AddPlaceUseCase(repository), admin_ids=())
 
     assert repository.search() == []
     assert await state.get_state() is None
@@ -462,6 +463,7 @@ async def test_a_database_failure_tells_the_driver_and_clears_the_flow() -> None
         message,
         state,
         add_place=AddPlaceUseCase(ExplodingRepository()),
+        admin_ids=(),
     )
 
     assert await state.get_state() is None
@@ -479,7 +481,7 @@ async def test_duplicate_yes_moves_on_to_the_note_step() -> None:
     )
     callback = FakeCallbackQuery("add_place:duplicate:yes")
 
-    await handle_duplicate_answer(callback, state)
+    await handle_duplicate_answer(callback, state, admin_ids=())
 
     assert await state.get_state() == AddPlace.note.state
 
@@ -494,7 +496,7 @@ async def test_duplicate_yes_keeps_the_data_the_save_step_needs() -> None:
         longitude=37.61,
     )
 
-    await handle_duplicate_answer(FakeCallbackQuery("add_place:duplicate:yes"), state)
+    await handle_duplicate_answer(FakeCallbackQuery("add_place:duplicate:yes"), state, admin_ids=())
 
     data = await state.get_data()
     assert (data["name"], data["latitude"], data["longitude"]) == ("Газпром", 55.75, 37.61)
@@ -507,7 +509,7 @@ async def test_duplicate_no_abandons_the_flow() -> None:
     await state.update_data(name="Газпром", category=PlaceCategory.FUEL.value)
     callback = FakeCallbackQuery("add_place:duplicate:no")
 
-    await handle_duplicate_answer(callback, state)
+    await handle_duplicate_answer(callback, state, admin_ids=())
 
     assert await state.get_state() is None
     assert repository.search() == []
@@ -521,7 +523,7 @@ async def test_an_unreadable_duplicate_answer_abandons_rather_than_saves() -> No
     await state.update_data(name="Газпром")
     callback = FakeCallbackQuery("add_place:duplicate:")
 
-    await handle_duplicate_answer(callback, state)
+    await handle_duplicate_answer(callback, state, admin_ids=())
 
     assert await state.get_state() is None
 
@@ -531,7 +533,7 @@ async def test_a_duplicate_answer_on_an_expired_message_clears_the_flow() -> Non
     await state.set_state(AddPlace.duplicate)
     callback = FakeCallbackQuery("add_place:duplicate:yes", with_message=False)
 
-    await handle_duplicate_answer(callback, state)
+    await handle_duplicate_answer(callback, state, admin_ids=())
 
     assert await state.get_state() is None
     assert callback.alerts[0] is not None
@@ -546,7 +548,7 @@ async def test_cancel_clears_the_flow_at_any_step() -> None:
     await state.update_data(name="Газпром")
     message = FakeMessage(text="/cancel")
 
-    await handle_global_cancel(message, state)
+    await handle_global_cancel(message, state, admin_ids=())
 
     assert await state.get_state() is None
     assert await state.get_data() == {}
@@ -557,7 +559,7 @@ async def test_cancel_at_the_note_step_saves_nothing() -> None:
     repository = InMemoryPlaceRepository()
     state = await _state_at_note()
 
-    await handle_global_cancel(FakeMessage(text="/cancel"), state)
+    await handle_global_cancel(FakeMessage(text="/cancel"), state, admin_ids=())
 
     assert repository.search() == []
     assert await state.get_data() == {}
@@ -572,7 +574,7 @@ async def test_a_place_with_no_author_is_not_saved() -> None:
     message = FakeMessage(text="M5")
     message.from_user = None
 
-    await handle_note(message, state, add_place=AddPlaceUseCase(repository))
+    await handle_note(message, state, add_place=AddPlaceUseCase(repository), admin_ids=())
 
     assert repository.search() == []
     assert await state.get_state() is None

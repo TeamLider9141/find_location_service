@@ -9,3 +9,5 @@ data/
 # agent tooling artifacts
 skill-observations/
 cross-cutting-principles.md
+bot.log
+*.egg-info/

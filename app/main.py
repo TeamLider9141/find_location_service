@@ -9,6 +9,7 @@ from app.presentation.telegram.bot import (
     create_place_repository,
     create_user_repository,
 )
+from app.presentation.telegram.commands import configure_commands
 from app.shared.logging import configure_logging
 
 
@@ -29,6 +30,7 @@ async def run_bot() -> int:
         admin_ids=settings.admin_ids,
     )
     try:
+        await configure_commands(bot, settings.admin_ids)
         await dispatcher.start_polling(bot)
     finally:
         await bot.session.close()

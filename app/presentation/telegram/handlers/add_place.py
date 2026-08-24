@@ -8,6 +8,7 @@ from aiogram.types import CallbackQuery, Message
 from app.application.use_cases.places import AddPlaceUseCase
 from app.domain.value_objects.category import PlaceCategory
 from app.domain.value_objects.coordinates import Coordinates
+from app.presentation.telegram.access import is_admin
 from app.presentation.telegram.errors import (
     EXPIRED_MESSAGE,
     answerable_message,
@@ -164,6 +165,7 @@ def _coordinates_from_message(message: Message) -> Coordinates | None:
 async def handle_duplicate_answer(
     callback_query: CallbackQuery,
     state: FSMContext,
+    admin_ids: tuple[int, ...],
 ) -> None:
     message = answerable_message(callback_query)
     if message is None:
@@ -179,7 +181,10 @@ async def handle_duplicate_answer(
         await message.answer(ASK_NOTE_MESSAGE)
     else:
         await state.clear()
-        await message.answer(CANCELLED_MESSAGE, reply_markup=build_main_menu_keyboard())
+        await message.answer(
+            CANCELLED_MESSAGE,
+            reply_markup=build_main_menu_keyboard(is_admin=is_admin(callback_query, admin_ids)),
+        )
 
     await callback_query.answer()
 
@@ -189,8 +194,9 @@ async def handle_skip_note(
     message: Message,
     state: FSMContext,
     add_place: AddPlaceUseCase,
+    admin_ids: tuple[int, ...],
 ) -> None:
-    await _save(message, state, add_place, note="")
+    await _save(message, state, add_place, note="", admin_ids=admin_ids)
 
 
 @router.message(AddPlace.note, F.text)
@@ -198,8 +204,9 @@ async def handle_note(
     message: Message,
     state: FSMContext,
     add_place: AddPlaceUseCase,
+    admin_ids: tuple[int, ...],
 ) -> None:
-    await _save(message, state, add_place, note=message.text or "")
+    await _save(message, state, add_place, note=message.text or "", admin_ids=admin_ids)
 
 
 
@@ -208,7 +215,9 @@ async def _save(
     state: FSMContext,
     add_place: AddPlaceUseCase,
     note: str,
+    admin_ids: tuple[int, ...] = (),
 ) -> None:
+    menu = build_main_menu_keyboard(is_admin=is_admin(message, admin_ids))
     data = await state.get_data()
     user_id = user_id_of(message)
     if user_id is None:
@@ -231,16 +240,16 @@ async def _save(
     except (KeyError, ValueError) as error:
         report_service_error(error, "add place")
         await state.clear()
-        await message.answer(SAVE_FAILED_MESSAGE, reply_markup=build_main_menu_keyboard())
+        await message.answer(SAVE_FAILED_MESSAGE, reply_markup=menu)
         return
     except sqlite3.Error as error:
         report_service_error(error, "add place")
         await state.clear()
-        await message.answer(DATABASE_ERROR_MESSAGE, reply_markup=build_main_menu_keyboard())
+        await message.answer(DATABASE_ERROR_MESSAGE, reply_markup=menu)
         return
 
     await state.clear()
     await message.answer(
         f"✅ Saqlandi.\n\n{format_place_card(place)}",
-        reply_markup=build_main_menu_keyboard(),
+        reply_markup=menu,
     )

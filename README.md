@@ -16,8 +16,9 @@ added it.
 - Find places near your current location, sorted by distance
 - Manage the places you contributed — change category, delete
 - Per-user settings for search radius and result count
-- Admin panel (`/admin`): statistics, user list, per-user detail, top searches,
-  moderation delete, broadcast
+- Admin panel — statistics, user list, per-user detail, top searches, moderation
+  delete, broadcast. Reached with `/admin` or the 🛠 button, which only appears in
+  the menu of an id listed in `ADMIN_IDS`
 
 Six categories: restaurant, cafe, fuel, hotel, parking, car service.
 

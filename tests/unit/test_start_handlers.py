@@ -3,6 +3,7 @@ from aiogram.fsm.storage.base import StorageKey
 from aiogram.fsm.storage.memory import MemoryStorage
 
 from app.presentation.telegram.handlers.start import handle_cancel, handle_start
+from app.presentation.telegram.keyboards.menu import ADMIN_BUTTON
 from app.presentation.telegram.states import AddPlace
 
 
@@ -30,7 +31,7 @@ def make_state(user_id: int = 42) -> FSMContext:
 async def test_start_shows_the_main_menu() -> None:
     message = FakeMessage()
 
-    await handle_start(message, make_state())
+    await handle_start(message, make_state(), admin_ids=())
 
     labels = [
         button.text
@@ -48,7 +49,7 @@ async def test_start_drops_a_half_finished_flow() -> None:
     await state.set_state(AddPlace.location)
     await state.update_data(name="Газпром")
 
-    await handle_start(message, state)
+    await handle_start(message, state, admin_ids=())
 
     assert await state.get_state() is None
     assert await state.get_data() == {}
@@ -60,7 +61,7 @@ async def test_cancel_clears_any_pending_flow() -> None:
     await state.set_state(AddPlace.note)
     await state.update_data(name="Газпром")
 
-    await handle_cancel(message, state)
+    await handle_cancel(message, state, admin_ids=())
 
     assert await state.get_state() is None
     assert await state.get_data() == {}
@@ -70,6 +71,35 @@ async def test_cancel_clears_any_pending_flow() -> None:
 async def test_cancel_returns_the_main_menu() -> None:
     message = FakeMessage()
 
-    await handle_cancel(message, make_state())
+    await handle_cancel(message, make_state(), admin_ids=())
 
     assert message.answers[0]["reply_markup"].keyboard[0][0].text == "🔎 Qidirish"
+
+
+def menu_labels(message: "FakeMessage") -> list[str]:
+    return [button.text for row in message.answers[0]["reply_markup"].keyboard for button in row]
+
+
+async def test_an_admin_sees_the_panel_button_on_start() -> None:
+    message = FakeMessage(user_id=99)
+
+    await handle_start(message, make_state(), admin_ids=(99,))
+
+    assert ADMIN_BUTTON in menu_labels(message)
+
+
+async def test_an_ordinary_driver_never_sees_the_panel_button() -> None:
+    message = FakeMessage(user_id=42)
+
+    await handle_start(message, make_state(), admin_ids=(99,))
+
+    assert ADMIN_BUTTON not in menu_labels(message)
+
+
+async def test_cancel_keeps_the_panel_button_for_an_admin() -> None:
+    # Leaving a flow must not silently downgrade the admin's keyboard.
+    message = FakeMessage(user_id=99)
+
+    await handle_cancel(message, make_state(99), admin_ids=(99,))
+
+    assert ADMIN_BUTTON in menu_labels(message)

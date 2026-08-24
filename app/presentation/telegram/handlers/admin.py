@@ -23,11 +23,11 @@ from app.presentation.telegram.admin_formatters import (
     format_user_detail,
     format_users_page,
 )
+from app.presentation.telegram.access import is_admin
 from app.presentation.telegram.errors import (
     EXPIRED_MESSAGE,
     answerable_message,
     report_service_error,
-    user_id_of,
 )
 from app.presentation.telegram.keyboards.admin import (
     USERS_PAGE_SIZE,
@@ -38,6 +38,7 @@ from app.presentation.telegram.keyboards.admin import (
     build_user_detail_keyboard,
     build_users_page_keyboard,
 )
+from app.presentation.telegram.keyboards.menu import ADMIN_BUTTON
 from app.presentation.telegram.states import AdminBroadcast
 
 router = Router(name="admin")
@@ -60,8 +61,9 @@ _BROADCAST_TEXT_KEY = "broadcast_text"
 
 
 @router.message(Command("admin"))
+@router.message(F.text == ADMIN_BUTTON)
 async def handle_admin_command(message: Message, admin_ids: tuple[int, ...]) -> None:
-    if not _is_admin(message, admin_ids):
+    if not is_admin(message, admin_ids):
         await message.answer(NOT_ADMIN_MESSAGE)
         return
 
@@ -273,7 +275,7 @@ async def handle_broadcast_text(
     admin_ids: tuple[int, ...],
     broadcast_recipients: ListBroadcastRecipientsUseCase,
 ) -> None:
-    if not _is_admin(message, admin_ids):
+    if not is_admin(message, admin_ids):
         await state.clear()
         await message.answer(NOT_ADMIN_MESSAGE)
         return
@@ -392,7 +394,7 @@ async def _open(callback_query: CallbackQuery, admin_ids: tuple[int, ...]) -> Me
     Every callback goes through here: the callback data is guessable, so the
     check cannot live only in the command that hands out the buttons.
     """
-    if not _is_admin(callback_query, admin_ids):
+    if not is_admin(callback_query, admin_ids):
         await callback_query.answer(NOT_ADMIN_MESSAGE)
         return None
 
@@ -402,11 +404,6 @@ async def _open(callback_query: CallbackQuery, admin_ids: tuple[int, ...]) -> Me
         return None
 
     return message
-
-
-def _is_admin(update: object, admin_ids: tuple[int, ...]) -> bool:
-    user_id = user_id_of(update)
-    return user_id is not None and user_id in admin_ids
 
 
 def _parse_int(data: str | None, prefix: str) -> int | None:

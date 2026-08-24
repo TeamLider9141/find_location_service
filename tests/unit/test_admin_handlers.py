@@ -545,3 +545,15 @@ async def test_a_second_flood_error_for_one_driver_gives_up(places, users, sleep
 
     assert [chat_id for chat_id, _ in bot.sent] == [2]
     assert "Yetib bormadi: 1 ta" in callback.texts[-1]
+
+
+def test_the_menu_button_opens_the_panel_too() -> None:
+    # Two registrations for one callback: the /admin command and the reply
+    # keyboard button an admin taps instead of typing it.
+    registrations = [
+        handler
+        for handler in admin_handlers.router.message.handlers
+        if handler.callback is handle_admin_command
+    ]
+
+    assert len(registrations) == 2

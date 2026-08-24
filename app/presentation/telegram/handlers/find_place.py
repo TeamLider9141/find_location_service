@@ -24,11 +24,7 @@ from app.presentation.telegram.formatters import (
     format_place_card,
     format_place_results,
 )
-from app.presentation.telegram.keyboards.menu import (
-    NEARBY_BUTTON,
-    SEARCH_BUTTON,
-    build_main_menu_keyboard,
-)
+from app.presentation.telegram.keyboards.menu import NEARBY_BUTTON, SEARCH_BUTTON
 from app.presentation.telegram.keyboards.places import (
     build_category_choice_keyboard,
     build_place_results_keyboard,

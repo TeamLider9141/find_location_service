@@ -399,7 +399,7 @@ async def test_nearby_cancel_returns_to_the_menu() -> None:
     await state.set_state(NearbyPlace.location)
     message = FakeMessage(text="/cancel")
 
-    await handle_global_cancel(message, state)
+    await handle_global_cancel(message, state, admin_ids=())
 
     assert await state.get_state() is None
     assert message.answers[0]["reply_markup"] is not None
