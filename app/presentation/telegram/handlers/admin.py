@@ -190,6 +190,8 @@ async def handle_admin_user_detail(
     await message.answer(
         format_user_detail(detail),
         reply_markup=build_user_detail_keyboard(detail.places, user_id=detail.user.id),
+        parse_mode="HTML",
+        disable_web_page_preview=True,
     )
     await callback_query.answer()
 
@@ -250,7 +252,11 @@ async def handle_admin_places_category(
         await callback_query.answer()
         return
 
-    await message.answer(format_admin_places(category, groups))
+    await message.answer(
+        format_admin_places(category, groups),
+        parse_mode="HTML",
+        disable_web_page_preview=True,
+    )
     await callback_query.answer()
 
 

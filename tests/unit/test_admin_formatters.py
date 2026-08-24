@@ -156,14 +156,29 @@ def test_activity_stamps_are_shown_in_tashkent_time() -> None:
     assert "14:05" not in text
 
 
-def test_a_user_detail_links_every_place_to_the_map() -> None:
-    # The admin checks a suspicious entry by opening it on the map, not by
-    # reading raw coordinates.
+def test_a_user_detail_makes_every_place_name_the_map_link() -> None:
+    # The admin checks a suspicious entry by opening it on the map; the name
+    # itself is the link, not a raw URL under it.
     detail = UserDetail(user=make_user(), places=[make_place()], searches=0)
 
     text = format_user_detail(detail)
 
-    assert "https://www.google.com/maps/search/?api=1&query=55.75,37.61" in text
+    assert '<a href="https://www.google.com/maps/search/?api=1&query=55.75,37.61">' in text
+    assert ">Газпром</a>" in text
+
+
+def test_a_user_detail_with_html_in_the_name_cannot_break() -> None:
+    # Names are user input; one "<" would make Telegram refuse the message.
+    detail = UserDetail(
+        user=make_user(full_name="<Ali>"),
+        places=[make_place(name="<Кафе & Бар>")],
+        searches=0,
+    )
+
+    text = format_user_detail(detail)
+
+    assert "&lt;Ali&gt;" in text
+    assert "&lt;Кафе &amp; Бар&gt;" in text
 
 
 def test_a_user_without_a_username_is_still_readable() -> None:
@@ -213,8 +228,9 @@ def test_admin_places_number_the_authors_with_their_links() -> None:
 
     assert "2 ta" in text
     assert "1) Ali (@ali)" in text
-    assert "📍 Газпром" in text
-    assert "https://www.google.com/maps/search/?api=1&query=55.75,37.61" in text
+    # The name itself carries the link, not a raw URL under it.
+    assert '<a href="https://www.google.com/maps/search/?api=1&query=55.75,37.61">' in text
+    assert ">Газпром</a>" in text
     # An author tracking never saw is labelled by id, not dropped.
     assert "2) 9" in text
 

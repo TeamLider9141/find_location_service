@@ -1,3 +1,4 @@
+import html
 from datetime import datetime, timedelta, timezone
 
 from app.application.use_cases.admin import (
@@ -77,9 +78,12 @@ def format_users_page(page: UsersPage) -> str:
 
 
 def format_user_detail(detail: UserDetail) -> str:
+    # Sent with parse_mode="HTML" so the place names can carry their map links.
+    # Names — the user's and the places' — are input, so they are escaped: one
+    # "<" would make Telegram refuse the whole message.
     user = detail.user
     lines = [
-        f"👤 {_user_label(user)}",
+        f"👤 {html.escape(_user_label(user))}",
         f"ID: {user.id}",
         f"Birinchi marta: {_format_stamp(user.first_seen_at)}",
         f"Oxirgi faollik: {_format_stamp(user.last_seen_at)}",
@@ -90,16 +94,23 @@ def format_user_detail(detail: UserDetail) -> str:
     if detail.places:
         lines.append("")
         for index, place in enumerate(detail.places, start=1):
-            # The link lets the admin open a suspicious entry on the map
-            # without leaving the panel.
-            lines.append(f"{index}) {place.name} ({category_label(place.category)})")
-            lines.append(f"   {place_map_link(place)}")
+            # The name is the link: the admin opens a suspicious entry on the
+            # map by tapping the line they are already reading.
+            name = html.escape(place.name)
+            lines.append(
+                f'{index}) <a href="{place_map_link(place)}">{name}</a>'
+                f" ({category_label(place.category)})"
+            )
 
     return "\n".join(lines)
 
 
 def format_admin_places(category: PlaceCategory, groups: list[AuthorPlaces]) -> str:
-    """One category's places, numbered by author, each place under its map link."""
+    """One category's places, numbered by author, each name carrying its link.
+
+    Sent with parse_mode="HTML"; author and place names are input, so both are
+    escaped on the way in.
+    """
     total = sum(len(group.places) for group in groups)
     if total == 0:
         return NO_PLACES_IN_CATEGORY_MESSAGE
@@ -115,12 +126,12 @@ def format_admin_places(category: PlaceCategory, groups: list[AuthorPlaces]) -> 
             user.username if user else None,
             group.author_id,
         )
-        lines.append(f"{index}) {author} — {len(group.places)} ta")
+        lines.append(f"{index}) {html.escape(author)} — {len(group.places)} ta")
         for place in group.places:
             if shown >= PLACES_PREVIEW_LIMIT:
                 break
-            lines.append(f"   📍 {place.name}")
-            lines.append(f"   {place_map_link(place)}")
+            name = html.escape(place.name)
+            lines.append(f'   📍 <a href="{place_map_link(place)}">{name}</a>')
             shown += 1
         lines.append("")
 
