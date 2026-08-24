@@ -8,6 +8,7 @@ from app.application.use_cases.places import (
 )
 from app.domain.value_objects.category import PlaceCategory
 from app.domain.value_objects.coordinates import Coordinates
+from app.infrastructure.repositories.in_memory_deletions import InMemoryDeletionLog
 from app.infrastructure.repositories.in_memory_places import InMemoryPlaceRepository
 from app.presentation.telegram.keyboards.places import BORDER_CATEGORIES, BORDER_GROUP_VALUE
 from app.presentation.telegram.handlers.my_places import (
@@ -304,7 +305,7 @@ async def test_confirm_delete_removes_my_place() -> None:
 
     await handle_confirm_delete(
         callback,
-        delete_place=DeletePlaceUseCase(repository),
+        delete_place=DeletePlaceUseCase(repository, InMemoryDeletionLog()),
     )
 
     assert repository.get(place.id) is None
@@ -316,7 +317,7 @@ async def test_confirm_delete_on_someone_elses_place_is_refused() -> None:
 
     await handle_confirm_delete(
         callback,
-        delete_place=DeletePlaceUseCase(repository),
+        delete_place=DeletePlaceUseCase(repository, InMemoryDeletionLog()),
     )
 
     assert repository.get(place.id) is not None
@@ -331,7 +332,7 @@ async def test_confirm_delete_survives_a_message_too_old_to_answer() -> None:
 
     await handle_confirm_delete(
         callback,
-        delete_place=DeletePlaceUseCase(repository),
+        delete_place=DeletePlaceUseCase(repository, InMemoryDeletionLog()),
     )
 
     # The guard runs before the delete, so nothing is removed behind a driver
@@ -345,7 +346,7 @@ async def test_a_database_failure_while_deleting_tells_the_driver() -> None:
 
     await handle_confirm_delete(
         callback,
-        delete_place=DeletePlaceUseCase(ExplodingRepository()),
+        delete_place=DeletePlaceUseCase(ExplodingRepository(), InMemoryDeletionLog()),
     )
 
     assert "baza" in str(callback.message.answers[0]["text"]).lower()

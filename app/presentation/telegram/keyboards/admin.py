@@ -12,6 +12,7 @@ def build_admin_menu_keyboard() -> InlineKeyboardMarkup:
             [InlineKeyboardButton(text="📊 Statistika", callback_data="admin:stats")],
             [InlineKeyboardButton(text="👥 Foydalanuvchilar", callback_data="admin:users:0")],
             [InlineKeyboardButton(text="🗺 Userlar manzillari", callback_data="admin:places")],
+            [InlineKeyboardButton(text="🧾 O'chirishlar jurnali", callback_data="admin:deletions")],
             [InlineKeyboardButton(text="🔎 Top qidiruvlar", callback_data="admin:searches")],
             [InlineKeyboardButton(text="📢 Xabar yuborish", callback_data="admin:broadcast")],
         ]
@@ -128,6 +129,20 @@ def build_broadcast_confirmation_keyboard() -> InlineKeyboardMarkup:
                     callback_data="admin:broadcast:cancel",
                 )
             ],
+        ]
+    )
+
+
+def build_deletion_log_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="📄 HTML ko'rinishda yuklab olish",
+                    callback_data="admin:deletions_html",
+                )
+            ],
+            [InlineKeyboardButton(text="⬅ Admin menyu", callback_data="admin:home")],
         ]
     )
 

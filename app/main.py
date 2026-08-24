@@ -6,6 +6,7 @@ from app.config.settings import get_settings
 from app.presentation.telegram.bot import (
     create_add_access_repository,
     create_bot,
+    create_deletion_log,
     create_dispatcher,
     create_place_repository,
     create_throttle_middleware,
@@ -34,6 +35,7 @@ async def run_bot() -> int:
         user_settings=create_user_settings_store(settings),
         throttle=create_throttle_middleware(settings),
         add_access=create_add_access_repository(settings),
+        deletions=create_deletion_log(settings),
         admin_ids=settings.admin_ids,
         super_admin_ids=settings.super_admin_ids,
     )

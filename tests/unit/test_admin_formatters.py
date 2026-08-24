@@ -3,12 +3,14 @@ from datetime import datetime
 from app.application.use_cases.admin import (
     AdminOverview,
     AuthorPlaces,
+    DeletionRow,
     AuthorRanking,
     UserDetail,
     UserRow,
     UsersPage,
 )
 from app.domain.entities.bot_user import BotUser
+from app.domain.entities.deletion_record import DeletionRecord
 from app.domain.entities.place import Place
 from app.domain.value_objects.category import PlaceCategory
 from app.domain.value_objects.coordinates import Coordinates
@@ -17,6 +19,7 @@ from app.presentation.telegram.admin_formatters import (
     format_admin_places,
     format_broadcast_preview,
     format_broadcast_result,
+    format_deletion_log,
     format_top_searches,
     format_user_detail,
     format_users_page,
@@ -269,3 +272,51 @@ def test_a_huge_category_is_cut_with_a_tail_note() -> None:
 
     assert text.count("📍") == 30
     assert "yana 10 ta joy" in text
+
+
+def test_the_deletion_journal_reads_as_a_numbered_list() -> None:
+    record = DeletionRecord(
+        id=1,
+        place_name="Газпром",
+        category=PlaceCategory.FUEL,
+        latitude=55.75,
+        longitude=37.61,
+        note="",
+        added_by_user_id=42,
+        deleted_by_user_id=7,
+        source="owner",
+        deleted_at=STAMP,
+    )
+    rows = [DeletionRow(record=record, deleted_by=make_user(), added_by=None)]
+
+    text = format_deletion_log(rows)
+
+    assert "1)" in text
+    assert "egasi o'chirdi" in text
+    assert '<a href="https://www.google.com/maps/search/?api=1&query=55.75,37.61">' in text
+    assert "Ali (@ali)" in text
+    # The author was never tracked, so the id stands in for the name.
+    assert "42" in text
+
+
+def test_an_admin_deletion_is_labelled_as_such() -> None:
+    record = DeletionRecord(
+        id=1,
+        place_name="Газпром",
+        category=PlaceCategory.FUEL,
+        latitude=55.75,
+        longitude=37.61,
+        note="",
+        added_by_user_id=42,
+        deleted_by_user_id=100,
+        source="admin",
+        deleted_at=STAMP,
+    )
+
+    text = format_deletion_log([DeletionRow(record=record, deleted_by=None, added_by=None)])
+
+    assert "admin panel orqali" in text
+
+
+def test_an_empty_journal_says_so() -> None:
+    assert "bo'sh" in format_deletion_log([]).lower()

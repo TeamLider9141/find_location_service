@@ -10,6 +10,7 @@ from app.application.use_cases.access import DecideAddAccessUseCase, RevokeAddAc
 from app.application.use_cases.admin import (
     AdminPlacesByCategoryUseCase,
     DeletePlaceAsAdminUseCase,
+    ListDeletionsUseCase,
     GetAdminOverviewUseCase,
     GetUserDetailUseCase,
     ListBroadcastRecipientsUseCase,
@@ -21,6 +22,7 @@ from app.domain.value_objects.category import PlaceCategory
 from app.domain.value_objects.coordinates import Coordinates
 from app.domain.value_objects.add_access import AddAccessStatus
 from app.infrastructure.repositories.in_memory_add_access import InMemoryAddAccessRepository
+from app.infrastructure.repositories.in_memory_deletions import InMemoryDeletionLog
 from app.infrastructure.repositories.in_memory_places import InMemoryPlaceRepository
 from app.infrastructure.repositories.in_memory_users import InMemoryUserRepository
 from app.presentation.telegram.handlers import admin as admin_handlers
@@ -40,6 +42,8 @@ from app.presentation.telegram.handlers.admin import (
     handle_admin_places_category,
     handle_allow_add,
     handle_deny_add,
+    handle_deletion_log,
+    handle_deletion_report,
     handle_revoke_add,
     handle_admin_searches,
     handle_admin_stats,
@@ -103,9 +107,13 @@ class FakeBot:
         flood: dict[int, int] | None = None,
     ) -> None:
         self.sent: list[tuple[int, str]] = []
+        self.documents: list[tuple[int, str | None]] = []
         self._blocked = blocked or set()
         # chat id -> how many more times sending to it hits flood control.
         self._flood = dict(flood or {})
+
+    async def send_document(self, chat_id: int, document: object, **_: object) -> None:
+        self.documents.append((chat_id, getattr(document, "filename", None)))
 
     async def send_message(self, chat_id: int, text: str, **_: object) -> None:
         if chat_id in self._blocked:
@@ -199,7 +207,7 @@ async def test_a_stranger_cannot_delete_a_place(places, users) -> None:
         callback,
         admin_ids=ADMIN_IDS,
         super_admin_ids=ADMIN_IDS,
-        delete_place_as_admin=DeletePlaceAsAdminUseCase(places),
+        delete_place_as_admin=DeletePlaceAsAdminUseCase(places, InMemoryDeletionLog()),
     )
 
     assert places.get(stored.id) is not None
@@ -343,7 +351,7 @@ async def test_confirming_removes_a_place_the_admin_never_added(places, users) -
         callback,
         admin_ids=ADMIN_IDS,
         super_admin_ids=ADMIN_IDS,
-        delete_place_as_admin=DeletePlaceAsAdminUseCase(places),
+        delete_place_as_admin=DeletePlaceAsAdminUseCase(places, InMemoryDeletionLog()),
     )
 
     assert places.get(stored.id) is None
@@ -357,7 +365,7 @@ async def test_deleting_a_place_that_is_already_gone_is_reported(places, users) 
         callback,
         admin_ids=ADMIN_IDS,
         super_admin_ids=ADMIN_IDS,
-        delete_place_as_admin=DeletePlaceAsAdminUseCase(places),
+        delete_place_as_admin=DeletePlaceAsAdminUseCase(places, InMemoryDeletionLog()),
     )
 
     assert callback.alerts == [INVALID_SELECTION_MESSAGE]
@@ -690,7 +698,7 @@ async def test_an_ordinary_admin_cannot_confirm_a_delete_either(places) -> None:
         callback,
         admin_ids=BOTH_RUNGS,
         super_admin_ids=ADMIN_IDS,
-        delete_place_as_admin=DeletePlaceAsAdminUseCase(places),
+        delete_place_as_admin=DeletePlaceAsAdminUseCase(places, InMemoryDeletionLog()),
     )
 
     assert places.get(stored.id) is not None
@@ -1068,3 +1076,100 @@ async def test_the_border_group_opens_in_the_location_browser(places, users) -> 
     keyboard = callback.message.answers[0]["reply_markup"]
     data = [row[0].callback_data for row in keyboard.inline_keyboard]
     assert data == ["admin:places_cat:border_kz", "admin:places_cat:border_ru"]
+
+
+# --- the deletion journal ---------------------------------------------------
+
+
+async def test_the_menu_offers_the_deletion_journal() -> None:
+    message = FakeMessage()
+
+    await handle_admin_command(message, admin_ids=ADMIN_IDS)
+
+    keyboard = message.answers[0]["reply_markup"]
+    data = [button.callback_data for row in keyboard.inline_keyboard for button in row]
+    assert "admin:deletions" in data
+
+
+async def test_the_super_admin_reads_the_journal(places, users) -> None:
+    log = InMemoryDeletionLog()
+    stored = seed_place(places)
+    DeletePlaceAsAdminUseCase(places, log).execute(stored.id, deleted_by=ADMIN_ID)
+    callback = FakeCallbackQuery("admin:deletions")
+
+    await handle_deletion_log(
+        callback,
+        admin_ids=ADMIN_IDS,
+        super_admin_ids=ADMIN_IDS,
+        list_deletions=ListDeletionsUseCase(log, users),
+    )
+
+    text = callback.texts[0]
+    assert "Газпром" in text
+    assert "admin panel orqali" in text
+
+
+async def test_the_journal_is_super_admin_only(users) -> None:
+    # It names who deleted what; the ordinary rung has no business there.
+    callback = FakeCallbackQuery("admin:deletions", user_id=ORDINARY_ADMIN_ID)
+
+    await handle_deletion_log(
+        callback,
+        admin_ids=BOTH_RUNGS,
+        super_admin_ids=ADMIN_IDS,
+        list_deletions=ListDeletionsUseCase(InMemoryDeletionLog(), users),
+    )
+
+    assert callback.alerts == [SUPER_ADMIN_ONLY_MESSAGE]
+    assert callback.texts == []
+
+
+async def test_the_journal_offers_its_html_export(places, users) -> None:
+    log = InMemoryDeletionLog()
+    callback = FakeCallbackQuery("admin:deletions")
+
+    await handle_deletion_log(
+        callback,
+        admin_ids=ADMIN_IDS,
+        super_admin_ids=ADMIN_IDS,
+        list_deletions=ListDeletionsUseCase(log, users),
+    )
+
+    keyboard = callback.message.answers[0]["reply_markup"]
+    data = [button.callback_data for row in keyboard.inline_keyboard for button in row]
+    assert "admin:deletions_html" in data
+
+
+async def test_the_html_export_arrives_as_a_document(places, users) -> None:
+    log = InMemoryDeletionLog()
+    stored = seed_place(places)
+    DeletePlaceAsAdminUseCase(places, log).execute(stored.id, deleted_by=ADMIN_ID)
+    bot = FakeBot()
+    callback = FakeCallbackQuery("admin:deletions_html")
+
+    await handle_deletion_report(
+        callback,
+        admin_ids=ADMIN_IDS,
+        super_admin_ids=ADMIN_IDS,
+        list_deletions=ListDeletionsUseCase(log, users),
+        bot=bot,
+    )
+
+    assert bot.documents == [(ADMIN_ID, "ochirishlar_jurnali.html")]
+    assert callback.alerts == [None]
+
+
+async def test_the_html_export_is_super_admin_only(users) -> None:
+    bot = FakeBot()
+    callback = FakeCallbackQuery("admin:deletions_html", user_id=ORDINARY_ADMIN_ID)
+
+    await handle_deletion_report(
+        callback,
+        admin_ids=BOTH_RUNGS,
+        super_admin_ids=ADMIN_IDS,
+        list_deletions=ListDeletionsUseCase(InMemoryDeletionLog(), users),
+        bot=bot,
+    )
+
+    assert bot.documents == []
+    assert callback.alerts == [SUPER_ADMIN_ONLY_MESSAGE]

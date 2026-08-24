@@ -1,7 +1,9 @@
 from dataclasses import dataclass
 
 from app.domain.entities.bot_user import BotUser
+from app.domain.entities.deletion_record import DeletionRecord
 from app.domain.entities.place import Place
+from app.domain.interfaces.deletions import DeletionLog
 from app.domain.interfaces.places import PlaceRepository
 from app.domain.interfaces.users import UserRepository
 from app.domain.value_objects.category import PlaceCategory
@@ -216,11 +218,42 @@ def _author_sort_key(group: AuthorPlaces) -> str:
 
 
 class DeletePlaceAsAdminUseCase:
-    def __init__(self, places: PlaceRepository) -> None:
+    def __init__(self, places: PlaceRepository, deletions: DeletionLog) -> None:
         self._places = places
+        self._deletions = deletions
 
-    def execute(self, place_id: int) -> bool:
-        return self._places.delete_any(place_id)
+    def execute(self, place_id: int, deleted_by: int) -> bool:
+        # Snapshot before the delete: afterwards there is nothing left to log.
+        place = self._places.get(place_id)
+        deleted = self._places.delete_any(place_id)
+        if deleted and place is not None:
+            self._deletions.record(place, deleted_by=deleted_by, source="admin")
+        return deleted
+
+
+@dataclass(frozen=True)
+class DeletionRow:
+    """One journal entry with its people resolved to names where known."""
+
+    record: DeletionRecord
+    deleted_by: BotUser | None
+    added_by: BotUser | None
+
+
+class ListDeletionsUseCase:
+    def __init__(self, deletions: DeletionLog, users: UserRepository) -> None:
+        self._deletions = deletions
+        self._users = users
+
+    def execute(self, limit: int = 30) -> list[DeletionRow]:
+        return [
+            DeletionRow(
+                record=record,
+                deleted_by=self._users.get(record.deleted_by_user_id),
+                added_by=self._users.get(record.added_by_user_id),
+            )
+            for record in self._deletions.list_recent(limit)
+        ]
 
 
 class ListBroadcastRecipientsUseCase:

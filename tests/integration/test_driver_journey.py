@@ -20,6 +20,7 @@ from app.application.use_cases.places import (
 )
 from app.domain.value_objects.add_access import AddAccessStatus
 from app.infrastructure.database.sqlite_add_access import SQLiteAddAccessRepository
+from app.infrastructure.database.sqlite_deletions import SQLiteDeletionLog
 from app.infrastructure.database.sqlite_places import SQLitePlaceRepository
 from app.infrastructure.database.sqlite_user_settings import SQLiteUserSettingsStore
 from app.infrastructure.repositories.in_memory_users import InMemoryUserRepository
@@ -68,6 +69,7 @@ class Journey:
         self.places = SQLitePlaceRepository(database)
         self.settings = SQLiteUserSettingsStore(database)
         self.access = SQLiteAddAccessRepository(database)
+        self.deletions = SQLiteDeletionLog(database)
         self.request_add_access = RequestAddAccessUseCase(self.access)
         self.decide_add_access = DecideAddAccessUseCase(self.access)
         # The journey is about what approved drivers can do; the gate itself
@@ -78,7 +80,7 @@ class Journey:
         self.find_places = FindPlacesUseCase(self.places)
         self.nearby_places = NearbyPlacesUseCase(self.places)
         self.list_my_places = ListMyPlacesUseCase(self.places)
-        self.delete_place = DeletePlaceUseCase(self.places)
+        self.delete_place = DeletePlaceUseCase(self.places, self.deletions)
         self.record_search = RecordSearchUseCase(InMemoryUserRepository())
         self.state = make_state(DRIVER)
 

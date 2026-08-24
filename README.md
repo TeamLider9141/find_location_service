@@ -75,6 +75,12 @@ mistyped throttle must not be a way to lock the bot shut.
 `scripts/env_cheklovlar.sh` writes the throttle block into an existing `.env`, with the
 notes in Uzbek. It is safe to run twice; it replaces the block rather than appending to it.
 
+`scripts/backup_bazani.sh` is the hourly backup: run from cron, it copies the database
+only when it changed since the last run and sends the copy to every id in
+`SUPER_ADMIN_IDS` as a Telegram document. Every place deletion is also journalled in the
+`deletion_log` table — the 🧾 button in the admin panel (super admins only) lists who
+deleted what, from where, and when.
+
 ## Run
 
 ```bash

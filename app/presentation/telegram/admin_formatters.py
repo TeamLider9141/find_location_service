@@ -4,6 +4,7 @@ from datetime import datetime, timedelta, timezone
 from app.application.use_cases.admin import (
     AdminOverview,
     AuthorPlaces,
+    DeletionRow,
     UserDetail,
     UsersPage,
 )
@@ -16,6 +17,12 @@ EMPTY_DATABASE_MESSAGE = "Hali hech kim joy qo'shmagan."
 NO_USERS_MESSAGE = "Foydalanuvchilar yo'q."
 NO_SEARCHES_MESSAGE = "Hali qidiruv yo'q."
 NO_PLACES_IN_CATEGORY_MESSAGE = "Bu kategoriyada hali joy yo'q."
+NO_DELETIONS_MESSAGE = "Jurnal bo'sh — hali hech narsa o'chirilmagan."
+
+DELETION_SOURCE_LABELS = {
+    "owner": "egasi o'chirdi",
+    "admin": "admin panel orqali",
+}
 
 # Telegram cuts a message at 4096 characters; a place entry with its link runs
 # about a hundred. The cap keeps the reply well inside the limit.
@@ -145,6 +152,38 @@ def format_admin_places(category: PlaceCategory, groups: list[AuthorPlaces]) -> 
         lines.append(f"…va yana {remaining} ta joy.")
 
     return "\n".join(lines).strip()
+
+
+def format_deletion_log(rows: list[DeletionRow]) -> str:
+    """The tombstones, newest first: what went, who removed it, from where.
+
+    Sent with parse_mode="HTML"; names are input, so they are escaped.
+    """
+    if not rows:
+        return NO_DELETIONS_MESSAGE
+
+    lines = [f"🧾 O'chirishlar jurnali — oxirgi {len(rows)} ta", ""]
+    for index, row in enumerate(rows, start=1):
+        record = row.record
+        link = (
+            "https://www.google.com/maps/search/?api=1"
+            f"&query={record.latitude},{record.longitude}"
+        )
+        source = DELETION_SOURCE_LABELS.get(record.source, record.source)
+        name = html.escape(record.place_name)
+        deleter = _label_or_id(row.deleted_by, record.deleted_by_user_id)
+        author = _label_or_id(row.added_by, record.added_by_user_id)
+        lines.append(f"{index}) {_format_stamp(record.deleted_at)} — {source}")
+        lines.append(f'   📍 <a href="{link}">{name}</a> ({category_label(record.category)})')
+        lines.append(f"   O'chirgan: {html.escape(deleter)}")
+        lines.append(f"   Qo'shgan edi: {html.escape(author)}")
+        lines.append("")
+
+    return "\n".join(lines).rstrip()
+
+
+def _label_or_id(user: BotUser | None, user_id: int) -> str:
+    return _user_label(user) if user else str(user_id)
 
 
 def format_top_searches(rows: list[tuple[str, int]]) -> str:

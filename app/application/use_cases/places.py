@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 
 from app.domain.entities.place import Place
+from app.domain.interfaces.deletions import DeletionLog
 from app.domain.interfaces.places import (
     DEFAULT_DUPLICATE_RADIUS_METERS,
     PlaceRepository,
@@ -149,8 +150,14 @@ class UpdatePlaceUseCase:
 
 
 class DeletePlaceUseCase:
-    def __init__(self, repository: PlaceRepository) -> None:
+    def __init__(self, repository: PlaceRepository, deletions: DeletionLog) -> None:
         self._repository = repository
+        self._deletions = deletions
 
     def execute(self, place_id: int, user_id: int) -> bool:
-        return self._repository.delete(place_id, user_id)
+        # Snapshot before the delete: afterwards there is nothing left to log.
+        place = self._repository.get(place_id)
+        deleted = self._repository.delete(place_id, user_id)
+        if deleted and place is not None:
+            self._deletions.record(place, deleted_by=user_id, source="owner")
+        return deleted

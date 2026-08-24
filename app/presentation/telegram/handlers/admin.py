@@ -5,7 +5,7 @@ from aiogram import Bot, F, Router
 from aiogram.exceptions import TelegramAPIError, TelegramRetryAfter
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
-from aiogram.types import CallbackQuery, Message
+from aiogram.types import BufferedInputFile, CallbackQuery, Message
 
 from app.application.use_cases.access import DecideAddAccessUseCase, RevokeAddAccessUseCase
 from app.application.use_cases.admin import (
@@ -14,6 +14,7 @@ from app.application.use_cases.admin import (
     GetAdminOverviewUseCase,
     GetUserDetailUseCase,
     ListBroadcastRecipientsUseCase,
+    ListDeletionsUseCase,
     ListUsersPageUseCase,
     TopSearchesUseCase,
 )
@@ -24,6 +25,7 @@ from app.presentation.telegram.admin_formatters import (
     format_admin_places,
     format_broadcast_preview,
     format_broadcast_result,
+    format_deletion_log,
     format_top_searches,
     format_user_detail,
     format_users_page,
@@ -33,6 +35,11 @@ from app.presentation.telegram.errors import (
     EXPIRED_MESSAGE,
     answerable_message,
     report_service_error,
+    user_id_of,
+)
+from app.presentation.telegram.deletion_report import (
+    REPORT_FILENAME,
+    render_deletion_report,
 )
 from app.presentation.telegram.keyboards.admin import (
     USERS_PAGE_SIZE,
@@ -40,6 +47,7 @@ from app.presentation.telegram.keyboards.admin import (
     build_admin_menu_keyboard,
     build_back_to_menu_keyboard,
     build_broadcast_confirmation_keyboard,
+    build_deletion_log_keyboard,
     build_user_detail_keyboard,
     build_users_page_keyboard,
 )
@@ -76,6 +84,10 @@ ACCESS_REVOKED_MESSAGE = "🚫 Ruxsat olib tashlandi"
 ACCESS_REVOKED_USER_MESSAGE = "🚫 Admin joy qo'shish ruxsatingizni bekor qildi."
 SUPER_ADMIN_ONLY_MESSAGE = "Bu faqat super admin uchun. Siz buni qila olmaysiz."
 TOP_SEARCHES_LIMIT = 10
+DELETIONS_LIMIT = 30
+# The HTML export carries the whole journal, not one message's worth.
+DELETIONS_EXPORT_LIMIT = 1000
+REPORT_FAILED_MESSAGE = "Faylni yuborib bo'lmadi. Qayta urinib ko'ring."
 # ~20 messages a second, under Telegram's ~30/s ceiling for bots.
 SEND_INTERVAL_SECONDS = 0.05
 
@@ -281,6 +293,72 @@ async def handle_admin_places_category(
     await callback_query.answer()
 
 
+@router.callback_query(F.data == "admin:deletions")
+async def handle_deletion_log(
+    callback_query: CallbackQuery,
+    admin_ids: tuple[int, ...],
+    super_admin_ids: tuple[int, ...],
+    list_deletions: ListDeletionsUseCase,
+) -> None:
+    """The tombstone journal. Super admins only — it names who deleted what."""
+    message = await _open_super(callback_query, admin_ids, super_admin_ids)
+    if message is None:
+        return
+
+    try:
+        rows = list_deletions.execute(limit=DELETIONS_LIMIT)
+    except sqlite3.Error as error:
+        report_service_error(error, "deletion log")
+        await message.answer(DATABASE_ERROR_MESSAGE)
+        await callback_query.answer()
+        return
+
+    await message.answer(
+        format_deletion_log(rows),
+        parse_mode="HTML",
+        disable_web_page_preview=True,
+        reply_markup=build_deletion_log_keyboard(),
+    )
+    await callback_query.answer()
+
+
+@router.callback_query(F.data == "admin:deletions_html")
+async def handle_deletion_report(
+    callback_query: CallbackQuery,
+    admin_ids: tuple[int, ...],
+    super_admin_ids: tuple[int, ...],
+    list_deletions: ListDeletionsUseCase,
+    bot: Bot,
+) -> None:
+    """The whole journal as one HTML table, sent as a document.
+
+    Telegram text tops out at 4096 characters and reads poorly as a table;
+    a file opens in the browser and holds everything.
+    """
+    message = await _open_super(callback_query, admin_ids, super_admin_ids)
+    if message is None:
+        return
+
+    try:
+        rows = list_deletions.execute(limit=DELETIONS_EXPORT_LIMIT)
+    except sqlite3.Error as error:
+        report_service_error(error, "deletion report")
+        await message.answer(DATABASE_ERROR_MESSAGE)
+        await callback_query.answer()
+        return
+
+    document = BufferedInputFile(
+        render_deletion_report(rows).encode("utf-8"), filename=REPORT_FILENAME
+    )
+    try:
+        await bot.send_document(user_id_of(callback_query) or 0, document)
+    except TelegramAPIError as error:
+        report_service_error(error, "deletion report upload")
+        await message.answer(REPORT_FAILED_MESSAGE)
+
+    await callback_query.answer()
+
+
 @router.callback_query(F.data == "admin:searches")
 async def handle_admin_searches(
     callback_query: CallbackQuery,
@@ -342,7 +420,9 @@ async def handle_place_delete_confirm(
         return
 
     try:
-        deleted = delete_place_as_admin.execute(place_id)
+        deleted = delete_place_as_admin.execute(
+            place_id, deleted_by=user_id_of(callback_query) or 0
+        )
     except sqlite3.Error as error:
         report_service_error(error, "admin delete place")
         await message.answer(DATABASE_ERROR_MESSAGE)

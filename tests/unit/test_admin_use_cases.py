@@ -13,6 +13,7 @@ from app.application.use_cases.admin import (
 from app.domain.entities.place import Place
 from app.domain.value_objects.category import PlaceCategory
 from app.domain.value_objects.coordinates import Coordinates
+from app.infrastructure.repositories.in_memory_deletions import InMemoryDeletionLog
 from app.infrastructure.repositories.in_memory_places import InMemoryPlaceRepository
 from app.infrastructure.repositories.in_memory_users import InMemoryUserRepository
 
@@ -193,12 +194,22 @@ def test_admin_delete_removes_someone_elses_place() -> None:
     places = InMemoryPlaceRepository()
     stored = add_place(places, user_id=1)
 
-    assert DeletePlaceAsAdminUseCase(places).execute(stored.id) is True
+    assert (
+        DeletePlaceAsAdminUseCase(places, InMemoryDeletionLog()).execute(
+            stored.id, deleted_by=100
+        )
+        is True
+    )
     assert places.get(stored.id) is None
 
 
 def test_admin_delete_reports_a_missing_place() -> None:
-    assert DeletePlaceAsAdminUseCase(InMemoryPlaceRepository()).execute(404) is False
+    assert (
+        DeletePlaceAsAdminUseCase(InMemoryPlaceRepository(), InMemoryDeletionLog()).execute(
+            404, deleted_by=100
+        )
+        is False
+    )
 
 
 def test_broadcast_recipients_are_every_known_user() -> None:

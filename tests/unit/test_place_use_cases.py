@@ -15,6 +15,7 @@ from app.application.use_cases.places import (
 from app.domain.entities.place import Place
 from app.domain.value_objects.category import PlaceCategory
 from app.domain.value_objects.coordinates import Coordinates
+from app.infrastructure.repositories.in_memory_deletions import InMemoryDeletionLog
 from app.infrastructure.repositories.in_memory_places import InMemoryPlaceRepository
 
 _EARTH_RADIUS_METERS = 6_371_000
@@ -400,7 +401,8 @@ def test_delete_place_by_the_author_succeeds() -> None:
     repository = InMemoryPlaceRepository()
     stored = _seed(repository)
 
-    assert DeletePlaceUseCase(repository).execute(stored.id, user_id=42) is True
+    deleter = DeletePlaceUseCase(repository, InMemoryDeletionLog())
+    assert deleter.execute(stored.id, user_id=42) is True
     assert repository.get(stored.id) is None
 
 
@@ -408,5 +410,6 @@ def test_delete_place_by_another_user_fails() -> None:
     repository = InMemoryPlaceRepository()
     stored = _seed(repository)
 
-    assert DeletePlaceUseCase(repository).execute(stored.id, user_id=7) is False
+    deleter = DeletePlaceUseCase(repository, InMemoryDeletionLog())
+    assert deleter.execute(stored.id, user_id=7) is False
     assert repository.get(stored.id) is not None

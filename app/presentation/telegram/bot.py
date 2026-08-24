@@ -6,6 +6,7 @@ from app.application.use_cases.admin import (
     GetAdminOverviewUseCase,
     GetUserDetailUseCase,
     ListBroadcastRecipientsUseCase,
+    ListDeletionsUseCase,
     ListUsersPageUseCase,
     RecordSearchUseCase,
     RecordUserVisitUseCase,
@@ -28,9 +29,11 @@ from app.application.use_cases.access import (
 )
 from app.config.settings import Settings
 from app.domain.interfaces.add_access import AddAccessRepository
+from app.domain.interfaces.deletions import DeletionLog
 from app.domain.interfaces.places import PlaceRepository
 from app.domain.interfaces.users import UserRepository
 from app.infrastructure.database.sqlite_add_access import SQLiteAddAccessRepository
+from app.infrastructure.database.sqlite_deletions import SQLiteDeletionLog
 from app.infrastructure.database.sqlite_places import SQLitePlaceRepository
 from app.infrastructure.database.sqlite_user_settings import SQLiteUserSettingsStore
 from app.infrastructure.database.sqlite_users import SQLiteUserRepository
@@ -47,6 +50,7 @@ def create_dispatcher(
     user_settings: UserSettingsStore,
     throttle: ThrottleMiddleware,
     add_access: AddAccessRepository,
+    deletions: DeletionLog,
     admin_ids: tuple[int, ...] = (),
     super_admin_ids: tuple[int, ...] = (),
 ) -> Dispatcher:
@@ -60,14 +64,15 @@ def create_dispatcher(
         get_place=GetPlaceUseCase(repository),
         list_my_places=ListMyPlacesUseCase(repository),
         update_place=UpdatePlaceUseCase(repository),
-        delete_place=DeletePlaceUseCase(repository),
+        delete_place=DeletePlaceUseCase(repository, deletions),
         user_settings=user_settings,
         record_search=RecordSearchUseCase(users),
         admin_overview=GetAdminOverviewUseCase(repository, users),
         list_users_page=ListUsersPageUseCase(users, repository),
         user_detail=GetUserDetailUseCase(users, repository),
         top_searches=TopSearchesUseCase(users),
-        delete_place_as_admin=DeletePlaceAsAdminUseCase(repository),
+        delete_place_as_admin=DeletePlaceAsAdminUseCase(repository, deletions),
+        list_deletions=ListDeletionsUseCase(deletions, users),
         broadcast_recipients=ListBroadcastRecipientsUseCase(users),
         count_places_by_category=CountPlacesByCategoryUseCase(repository),
         admin_places_by_category=AdminPlacesByCategoryUseCase(repository, users),
@@ -111,6 +116,12 @@ def create_place_repository(settings: Settings) -> PlaceRepository:
 def create_add_access_repository(settings: Settings) -> AddAccessRepository:
     # Same file again: a permission granted before a deploy must survive it.
     return SQLiteAddAccessRepository(settings.database_path)
+
+
+def create_deletion_log(settings: Settings) -> DeletionLog:
+    # Same file again: the journal answers "who deleted what" long after the
+    # fact, so it has to outlive every restart.
+    return SQLiteDeletionLog(settings.database_path)
 
 
 def create_throttle_middleware(settings: Settings) -> ThrottleMiddleware:

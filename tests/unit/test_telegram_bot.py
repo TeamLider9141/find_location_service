@@ -4,6 +4,7 @@ from aiogram.fsm.storage.memory import MemoryStorage
 
 from app.config.settings import Settings
 from app.infrastructure.repositories.in_memory_add_access import InMemoryAddAccessRepository
+from app.infrastructure.repositories.in_memory_deletions import InMemoryDeletionLog
 from app.infrastructure.repositories.in_memory_places import InMemoryPlaceRepository
 from app.infrastructure.repositories.in_memory_users import InMemoryUserRepository
 from app.presentation.telegram.bot import create_bot, create_dispatcher
@@ -17,6 +18,7 @@ REPOSITORY = InMemoryPlaceRepository()
 USERS = InMemoryUserRepository()
 SETTINGS = InMemoryUserSettingsStore()
 ACCESS = InMemoryAddAccessRepository()
+DELETIONS = InMemoryDeletionLog()
 ADMIN_IDS = (99,)
 SUPER_ADMIN_IDS = (98,)
 
@@ -29,6 +31,7 @@ def dispatcher() -> Dispatcher:
         user_settings=SETTINGS,
         throttle=ThrottleMiddleware(),
         add_access=ACCESS,
+        deletions=DELETIONS,
         admin_ids=ADMIN_IDS,
         super_admin_ids=SUPER_ADMIN_IDS,
     )
@@ -59,6 +62,7 @@ def test_dispatcher_injects_every_place_dependency(dispatcher: Dispatcher) -> No
         "request_add_access",
         "decide_add_access",
         "revoke_add_access",
+        "list_deletions",
         "admin_ids",
         "super_admin_ids",
     ):
