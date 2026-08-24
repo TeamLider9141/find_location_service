@@ -3,6 +3,7 @@ from aiogram import Dispatcher
 from aiogram.fsm.storage.memory import MemoryStorage
 
 from app.config.settings import Settings
+from app.infrastructure.repositories.in_memory_add_access import InMemoryAddAccessRepository
 from app.infrastructure.repositories.in_memory_places import InMemoryPlaceRepository
 from app.infrastructure.repositories.in_memory_users import InMemoryUserRepository
 from app.presentation.telegram.bot import create_bot, create_dispatcher
@@ -15,6 +16,7 @@ from app.presentation.telegram.selection_store import InMemoryUserSettingsStore
 REPOSITORY = InMemoryPlaceRepository()
 USERS = InMemoryUserRepository()
 SETTINGS = InMemoryUserSettingsStore()
+ACCESS = InMemoryAddAccessRepository()
 ADMIN_IDS = (99,)
 
 
@@ -25,6 +27,7 @@ def dispatcher() -> Dispatcher:
         users=USERS,
         user_settings=SETTINGS,
         throttle=ThrottleMiddleware(),
+        add_access=ACCESS,
         admin_ids=ADMIN_IDS,
     )
 
@@ -51,6 +54,8 @@ def test_dispatcher_injects_every_place_dependency(dispatcher: Dispatcher) -> No
         "top_searches",
         "delete_place_as_admin",
         "broadcast_recipients",
+        "request_add_access",
+        "decide_add_access",
         "admin_ids",
     ):
         assert key in dispatcher.workflow_data

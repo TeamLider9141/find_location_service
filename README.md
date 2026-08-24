@@ -9,7 +9,8 @@ added it.
 ## Features
 
 - Add a place: name, category, coordinates (Telegram location, map link or a lat/lon pair),
-  and an optional note
+  and an optional note. Adding is gated: the first attempt sends an approval request to the
+  admins, and the driver can add only after an admin allows it. Searching needs no approval.
 - Duplicate warning when a similar name already exists within 200 m
 - Search by name across Latin and Cyrillic spellings
 - Browse by category

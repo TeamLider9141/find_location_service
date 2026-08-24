@@ -7,6 +7,7 @@ from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
+from app.application.use_cases.access import DecideAddAccessUseCase
 from app.application.use_cases.admin import (
     DeletePlaceAsAdminUseCase,
     GetAdminOverviewUseCase,
@@ -53,6 +54,12 @@ DELETE_CANCELLED_MESSAGE = "O'chirish bekor qilindi."
 DELETE_PROMPT_MESSAGE = "Bu joyni bazadan butunlay o'chiraymi?"
 ASK_BROADCAST_MESSAGE = "Yuboriladigan xabar matnini yozing. Bekor qilish uchun /cancel."
 BROADCAST_CANCELLED_MESSAGE = "Xabar yuborish bekor qilindi."
+ACCESS_GRANTED_MESSAGE = "✅ Ruxsat berildi"
+ACCESS_DENIED_MESSAGE = "⛔ Rad etildi"
+ACCESS_GRANTED_USER_MESSAGE = (
+    "✅ Admin joy qo'shishga ruxsat berdi. ➕ Joy qo'shish tugmasini bosing."
+)
+ACCESS_DENIED_USER_MESSAGE = "⛔ Admin hozircha joy qo'shishga ruxsat bermadi."
 TOP_SEARCHES_LIMIT = 10
 # ~20 messages a second, under Telegram's ~30/s ceiling for bots.
 SEND_INTERVAL_SECONDS = 0.05
@@ -250,6 +257,64 @@ async def handle_place_delete_cancel(
         return
 
     await message.answer(DELETE_CANCELLED_MESSAGE)
+    await callback_query.answer()
+
+
+@router.callback_query(F.data.startswith("admin:allow_add:"))
+async def handle_allow_add(
+    callback_query: CallbackQuery,
+    admin_ids: tuple[int, ...],
+    decide_add_access: DecideAddAccessUseCase,
+    bot: Bot,
+) -> None:
+    await _decide_add_access(callback_query, admin_ids, decide_add_access, bot, allow=True)
+
+
+@router.callback_query(F.data.startswith("admin:deny_add:"))
+async def handle_deny_add(
+    callback_query: CallbackQuery,
+    admin_ids: tuple[int, ...],
+    decide_add_access: DecideAddAccessUseCase,
+    bot: Bot,
+) -> None:
+    await _decide_add_access(callback_query, admin_ids, decide_add_access, bot, allow=False)
+
+
+async def _decide_add_access(
+    callback_query: CallbackQuery,
+    admin_ids: tuple[int, ...],
+    decide_add_access: DecideAddAccessUseCase,
+    bot: Bot,
+    allow: bool,
+) -> None:
+    message = await _open(callback_query, admin_ids)
+    if message is None:
+        return
+
+    prefix = "admin:allow_add:" if allow else "admin:deny_add:"
+    user_id = _parse_int(callback_query.data, prefix=prefix)
+    if user_id is None:
+        await callback_query.answer(INVALID_SELECTION_MESSAGE)
+        return
+
+    try:
+        decide_add_access.execute(user_id, allow=allow)
+    except sqlite3.Error as error:
+        report_service_error(error, "add access decision")
+        await message.answer(DATABASE_ERROR_MESSAGE)
+        await callback_query.answer()
+        return
+
+    # The driver is waiting on this. A driver who blocked the bot in the
+    # meantime loses only their own answer, not the admin's confirmation.
+    verdict = ACCESS_GRANTED_USER_MESSAGE if allow else ACCESS_DENIED_USER_MESSAGE
+    try:
+        await bot.send_message(user_id, verdict)
+    except TelegramAPIError as error:
+        report_service_error(error, f"add access verdict to {user_id}")
+
+    confirmation = ACCESS_GRANTED_MESSAGE if allow else ACCESS_DENIED_MESSAGE
+    await message.answer(f"{confirmation} (ID: {user_id}).")
     await callback_query.answer()
 
 

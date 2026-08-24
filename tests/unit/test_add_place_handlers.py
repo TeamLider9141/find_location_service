@@ -7,6 +7,9 @@ from aiogram.fsm.storage.memory import MemoryStorage
 from app.application.use_cases.places import AddPlaceUseCase
 from app.domain.value_objects.category import PlaceCategory
 from app.domain.value_objects.coordinates import Coordinates
+from app.application.use_cases.access import RequestAddAccessUseCase
+from app.domain.value_objects.add_access import AddAccessStatus
+from app.infrastructure.repositories.in_memory_add_access import InMemoryAddAccessRepository
 from app.infrastructure.repositories.in_memory_places import InMemoryPlaceRepository
 from app.presentation.telegram.handlers.add_place import (
     handle_add_place_start,
@@ -24,6 +27,8 @@ from app.presentation.telegram.states import AddPlace
 class FakeUser:
     def __init__(self, user_id: int) -> None:
         self.id = user_id
+        self.full_name = "Ali"
+        self.username = None
 
 
 class FakeMessage:
@@ -36,6 +41,14 @@ class FakeMessage:
         self.answers.append({"text": text, **kwargs})
 
 
+class FakeBot:
+    def __init__(self) -> None:
+        self.sent: list[tuple[int, str]] = []
+
+    async def send_message(self, chat_id: int, text: str, **_: object) -> None:
+        self.sent.append((chat_id, text))
+
+
 def make_state(user_id: int = 42) -> FSMContext:
     return FSMContext(
         storage=MemoryStorage(),
@@ -43,11 +56,22 @@ def make_state(user_id: int = 42) -> FSMContext:
     )
 
 
+def access_with(status: AddAccessStatus | None, user_id: int = 42) -> InMemoryAddAccessRepository:
+    access = InMemoryAddAccessRepository()
+    if status is not None:
+        access.set_status(user_id, status)
+    return access
+
+
+def allowed() -> RequestAddAccessUseCase:
+    return RequestAddAccessUseCase(access_with(AddAccessStatus.APPROVED))
+
+
 async def test_start_asks_for_the_name() -> None:
     message = FakeMessage()
     state = make_state()
 
-    await handle_add_place_start(message, state)
+    await handle_add_place_start(message, state, allowed(), admin_ids=())
 
     assert await state.get_state() == AddPlace.name.state
     assert "nom" in str(message.answers[0]["text"]).lower()
@@ -60,9 +84,81 @@ async def test_start_drops_whatever_an_abandoned_flow_left_behind() -> None:
     state = make_state()
     await state.update_data(name="Старое", latitude=55.75, longitude=37.61)
 
-    await handle_add_place_start(FakeMessage(), state)
+    await handle_add_place_start(FakeMessage(), state, allowed(), admin_ids=())
 
     assert await state.get_data() == {}
+
+
+async def test_a_stranger_is_sent_to_the_admins_not_into_the_flow() -> None:
+    message = FakeMessage()
+    state = make_state()
+    access = access_with(None)
+    bot = FakeBot()
+
+    await handle_add_place_start(
+        message, state, RequestAddAccessUseCase(access), admin_ids=(1, 2), bot=bot
+    )
+
+    assert await state.get_state() is None
+    assert "admin" in str(message.answers[0]["text"]).lower()
+    assert [chat_id for chat_id, _ in bot.sent] == [1, 2]
+    assert access.status(42) == AddAccessStatus.PENDING
+
+
+async def test_a_waiting_driver_does_not_page_the_admins_again() -> None:
+    # Tapping the button ten times must not send the admins ten requests.
+    message = FakeMessage()
+    state = make_state()
+    bot = FakeBot()
+
+    await handle_add_place_start(
+        message,
+        state,
+        RequestAddAccessUseCase(access_with(AddAccessStatus.PENDING)),
+        admin_ids=(1,),
+        bot=bot,
+    )
+
+    assert await state.get_state() is None
+    assert bot.sent == []
+    assert "kuting" in str(message.answers[0]["text"]).lower()
+
+
+async def test_an_approved_driver_walks_straight_in() -> None:
+    state = make_state()
+    bot = FakeBot()
+
+    await handle_add_place_start(FakeMessage(), state, allowed(), admin_ids=(1,), bot=bot)
+
+    assert await state.get_state() == AddPlace.name.state
+    assert bot.sent == []
+
+
+async def test_a_rejected_driver_may_ask_again() -> None:
+    # Admins change their minds; to the driver a permanent silence is
+    # indistinguishable from a broken bot.
+    access = access_with(AddAccessStatus.REJECTED)
+    bot = FakeBot()
+
+    await handle_add_place_start(
+        FakeMessage(), make_state(), RequestAddAccessUseCase(access), admin_ids=(1,), bot=bot
+    )
+
+    assert access.status(42) == AddAccessStatus.PENDING
+    assert len(bot.sent) == 1
+
+
+async def test_an_admin_skips_their_own_gate() -> None:
+    state = make_state()
+    access = access_with(None)
+
+    await handle_add_place_start(
+        FakeMessage(), state, RequestAddAccessUseCase(access), admin_ids=(42,)
+    )
+
+    assert await state.get_state() == AddPlace.name.state
+    # No request was filed either: the admin never asked for anything.
+    assert access.status(42) is None
 
 
 async def test_name_step_stores_the_name_and_asks_for_a_category() -> None:

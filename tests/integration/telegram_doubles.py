@@ -12,6 +12,16 @@ from aiogram.fsm.storage.memory import MemoryStorage
 class FakeUser:
     def __init__(self, user_id: int) -> None:
         self.id = user_id
+        self.full_name = "Ali"
+        self.username = None
+
+
+class FakeBot:
+    def __init__(self) -> None:
+        self.sent: list[tuple[int, str]] = []
+
+    async def send_message(self, chat_id: int, text: str, **_: object) -> None:
+        self.sent.append((chat_id, text))
 
 
 class FakeMessage:

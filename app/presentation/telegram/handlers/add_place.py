@@ -1,9 +1,12 @@
 import sqlite3
 
-from aiogram import F, Router
+from aiogram import Bot, F, Router
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
+
+from app.application.use_cases.access import RequestAddAccessUseCase
+from app.domain.value_objects.add_access import AddAccessStatus
 
 from app.application.use_cases.places import AddPlaceUseCase
 from app.domain.value_objects.category import PlaceCategory
@@ -28,6 +31,7 @@ from app.presentation.telegram.keyboards.places import (
     build_duplicate_confirmation_keyboard,
 )
 from app.presentation.telegram.location_input import parse_coordinates_from_text
+from app.presentation.telegram.notifications import announce_add_request
 from app.presentation.telegram.states import AddPlace
 
 router = Router(name="add_place")
@@ -51,16 +55,76 @@ INVALID_CATEGORY_MESSAGE = "Bunday kategoriya yo'q. Ro'yxatdan tanlang."
 CANCELLED_MESSAGE = "Bekor qilindi. Boshlang'ich menyuga qaytdingiz."
 SAVE_FAILED_MESSAGE = "Saqlab bo'lmadi. Qaytadan urinib ko'ring."
 DATABASE_ERROR_MESSAGE = "Baza bilan muammo. Birozdan so'ng urinib ko'ring."
+GATE_REQUESTED_MESSAGE = (
+    "Joy qo'shish uchun admin ruxsati kerak.\n"
+    "So'rovingiz adminga yuborildi — javob kelishi bilan xabar beraman."
+)
+GATE_PENDING_MESSAGE = "So'rovingiz adminda ko'rilmoqda. Javobini kuting."
 
 
 @router.message(F.text == ADD_PLACE_BUTTON)
-async def handle_add_place_start(message: Message, state: FSMContext) -> None:
+async def handle_add_place_start(
+    message: Message,
+    state: FSMContext,
+    request_add_access: RequestAddAccessUseCase,
+    admin_ids: tuple[int, ...],
+    bot: Bot | None = None,
+) -> None:
+    # Anyone may search; writing to the shared database needs the admin's nod.
+    # Admins skip their own gate.
+    if not is_admin(message, admin_ids):
+        allowed = await _pass_the_gate(message, request_add_access, admin_ids, bot)
+        if not allowed:
+            return
+
     # Clear before setting the state: an abandoned flow leaves its name and
     # coordinates in storage, and carrying them into a fresh attempt would file
     # the new place at the old location.
     await state.set_data({})
     await state.set_state(AddPlace.name)
     await message.answer(ASK_NAME_MESSAGE)
+
+
+async def _pass_the_gate(
+    message: Message,
+    request_add_access: RequestAddAccessUseCase,
+    admin_ids: tuple[int, ...],
+    bot: Bot | None,
+) -> bool:
+    """Let an approved driver through; turn a request into news for the admins.
+
+    A pending driver is reminded to wait rather than re-announced — tapping the
+    button ten times must not page the admins ten times.
+    """
+    user_id = user_id_of(message)
+    if user_id is None:
+        return False
+
+    try:
+        previous = request_add_access.execute(user_id)
+    except sqlite3.Error as error:
+        report_service_error(error, "add access request")
+        await message.answer(DATABASE_ERROR_MESSAGE)
+        return False
+
+    if previous == AddAccessStatus.APPROVED:
+        return True
+
+    if previous == AddAccessStatus.PENDING:
+        await message.answer(GATE_PENDING_MESSAGE)
+        return False
+
+    await message.answer(GATE_REQUESTED_MESSAGE)
+    if bot is not None:
+        sender = message.from_user
+        await announce_add_request(
+            bot,
+            admin_ids,
+            full_name=sender.full_name or "",
+            username=sender.username,
+            user_id=user_id,
+        )
+    return False
 
 
 @router.message(AddPlace.name, F.text)

@@ -62,6 +62,25 @@ def build_user_detail_keyboard(places: list[Place], page: int = 0) -> InlineKeyb
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
+def build_add_access_keyboard(user_id: int) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="✅ Ruxsat berish",
+                    callback_data=f"admin:allow_add:{user_id}",
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="⛔ Rad etish",
+                    callback_data=f"admin:deny_add:{user_id}",
+                )
+            ],
+        ]
+    )
+
+
 def build_admin_delete_confirmation_keyboard(place_id: int) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[

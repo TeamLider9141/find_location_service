@@ -19,9 +19,12 @@ from app.application.use_cases.places import (
     NearbyPlacesUseCase,
     UpdatePlaceUseCase,
 )
+from app.application.use_cases.access import DecideAddAccessUseCase, RequestAddAccessUseCase
 from app.config.settings import Settings
+from app.domain.interfaces.add_access import AddAccessRepository
 from app.domain.interfaces.places import PlaceRepository
 from app.domain.interfaces.users import UserRepository
+from app.infrastructure.database.sqlite_add_access import SQLiteAddAccessRepository
 from app.infrastructure.database.sqlite_places import SQLitePlaceRepository
 from app.infrastructure.database.sqlite_user_settings import SQLiteUserSettingsStore
 from app.infrastructure.database.sqlite_users import SQLiteUserRepository
@@ -37,6 +40,7 @@ def create_dispatcher(
     users: UserRepository,
     user_settings: UserSettingsStore,
     throttle: ThrottleMiddleware,
+    add_access: AddAccessRepository,
     admin_ids: tuple[int, ...] = (),
 ) -> Dispatcher:
     dispatcher = Dispatcher(
@@ -55,6 +59,8 @@ def create_dispatcher(
         top_searches=TopSearchesUseCase(users),
         delete_place_as_admin=DeletePlaceAsAdminUseCase(repository),
         broadcast_recipients=ListBroadcastRecipientsUseCase(users),
+        request_add_access=RequestAddAccessUseCase(add_access),
+        decide_add_access=DecideAddAccessUseCase(add_access),
         admin_ids=admin_ids,
     )
 
@@ -86,6 +92,11 @@ def create_bot(settings: Settings) -> Bot:
 
 def create_place_repository(settings: Settings) -> PlaceRepository:
     return SQLitePlaceRepository(settings.database_path)
+
+
+def create_add_access_repository(settings: Settings) -> AddAccessRepository:
+    # Same file again: a permission granted before a deploy must survive it.
+    return SQLiteAddAccessRepository(settings.database_path)
 
 
 def create_throttle_middleware(settings: Settings) -> ThrottleMiddleware:

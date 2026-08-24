@@ -6,6 +6,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.storage.base import StorageKey
 from aiogram.fsm.storage.memory import MemoryStorage
 
+from app.application.use_cases.access import DecideAddAccessUseCase
 from app.application.use_cases.admin import (
     DeletePlaceAsAdminUseCase,
     GetAdminOverviewUseCase,
@@ -17,6 +18,8 @@ from app.application.use_cases.admin import (
 from app.application.use_cases.places import AddPlaceUseCase
 from app.domain.value_objects.category import PlaceCategory
 from app.domain.value_objects.coordinates import Coordinates
+from app.domain.value_objects.add_access import AddAccessStatus
+from app.infrastructure.repositories.in_memory_add_access import InMemoryAddAccessRepository
 from app.infrastructure.repositories.in_memory_places import InMemoryPlaceRepository
 from app.infrastructure.repositories.in_memory_users import InMemoryUserRepository
 from app.presentation.telegram.handlers import admin as admin_handlers
@@ -31,6 +34,8 @@ from app.presentation.telegram.handlers.admin import (
     UNKNOWN_USER_MESSAGE,
     handle_admin_command,
     handle_admin_home,
+    handle_allow_add,
+    handle_deny_add,
     handle_admin_searches,
     handle_admin_stats,
     handle_admin_user_detail,
@@ -557,3 +562,63 @@ def test_the_menu_button_opens_the_panel_too() -> None:
     ]
 
     assert len(registrations) == 2
+
+
+async def test_allowing_add_access_tells_the_driver() -> None:
+    access = InMemoryAddAccessRepository()
+    access.set_status(7, AddAccessStatus.PENDING)
+    bot = FakeBot()
+    callback = FakeCallbackQuery("admin:allow_add:7")
+
+    await handle_allow_add(callback, ADMIN_IDS, DecideAddAccessUseCase(access), bot)
+
+    assert access.status(7) == AddAccessStatus.APPROVED
+    assert bot.sent[0][0] == 7
+    assert callback.alerts == [None]
+
+
+async def test_refusing_add_access_tells_the_driver() -> None:
+    access = InMemoryAddAccessRepository()
+    access.set_status(7, AddAccessStatus.PENDING)
+    bot = FakeBot()
+    callback = FakeCallbackQuery("admin:deny_add:7")
+
+    await handle_deny_add(callback, ADMIN_IDS, DecideAddAccessUseCase(access), bot)
+
+    assert access.status(7) == AddAccessStatus.REJECTED
+    assert bot.sent[0][0] == 7
+
+
+async def test_a_stranger_cannot_hand_out_add_access() -> None:
+    # The callback data is guessable, so the check cannot live only in the
+    # message that carries the buttons.
+    access = InMemoryAddAccessRepository()
+    callback = FakeCallbackQuery("admin:allow_add:7", user_id=STRANGER_ID)
+
+    await handle_allow_add(callback, ADMIN_IDS, DecideAddAccessUseCase(access), FakeBot())
+
+    assert access.status(7) is None
+    assert callback.alerts == [NOT_ADMIN_MESSAGE]
+
+
+async def test_a_blocked_driver_does_not_undo_the_decision() -> None:
+    # The driver losing their own notification is their loss alone; the
+    # decision still lands and the admin still hears it did.
+    access = InMemoryAddAccessRepository()
+    bot = FakeBot(blocked={7})
+    callback = FakeCallbackQuery("admin:allow_add:7")
+
+    await handle_allow_add(callback, ADMIN_IDS, DecideAddAccessUseCase(access), bot)
+
+    assert access.status(7) == AddAccessStatus.APPROVED
+    assert callback.alerts == [None]
+    assert any("7" in text for text in callback.texts)
+
+
+async def test_a_garbled_add_access_id_is_refused() -> None:
+    access = InMemoryAddAccessRepository()
+    callback = FakeCallbackQuery("admin:allow_add:abc")
+
+    await handle_allow_add(callback, ADMIN_IDS, DecideAddAccessUseCase(access), FakeBot())
+
+    assert callback.alerts == [INVALID_SELECTION_MESSAGE]

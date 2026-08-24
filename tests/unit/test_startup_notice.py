@@ -2,6 +2,7 @@ from aiogram.exceptions import TelegramBadRequest
 
 from app.presentation.telegram.notifications import (
     STARTUP_MESSAGE,
+    announce_add_request,
     announce_new_user,
     announce_startup,
 )
@@ -10,12 +11,16 @@ from app.presentation.telegram.notifications import (
 class FakeBot:
     def __init__(self, rejects: tuple[int, ...] = ()) -> None:
         self.sent: list[tuple[int, str]] = []
+        self.markups: list[object] = []
         self._rejects = rejects
 
-    async def send_message(self, chat_id: int, text: str, **_: object) -> None:
+    async def send_message(
+        self, chat_id: int, text: str, reply_markup: object = None, **_: object
+    ) -> None:
         if chat_id in self._rejects:
             raise TelegramBadRequest(method=None, message="chat not found")
         self.sent.append((chat_id, text))
+        self.markups.append(reply_markup)
 
 
 async def test_every_admin_hears_about_the_restart() -> None:
@@ -74,3 +79,16 @@ async def test_an_unreachable_admin_does_not_stop_the_news() -> None:
     await announce_new_user(bot, (1, 2), full_name="Ali", username=None, user_id=42)
 
     assert [chat_id for chat_id, _ in bot.sent] == [2]
+
+
+async def test_an_add_request_reaches_every_admin_with_the_decision_buttons() -> None:
+    bot = FakeBot()
+
+    await announce_add_request(bot, (1, 2), full_name="Ali", username="ali", user_id=42)
+
+    assert [chat_id for chat_id, _ in bot.sent] == [1, 2]
+    assert "42" in bot.sent[0][1]
+    buttons = [
+        button.callback_data for row in bot.markups[0].inline_keyboard for button in row
+    ]
+    assert buttons == ["admin:allow_add:42", "admin:deny_add:42"]

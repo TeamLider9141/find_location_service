@@ -1,10 +1,13 @@
 from aiogram import Bot
 from aiogram.exceptions import TelegramAPIError
+from aiogram.types import InlineKeyboardMarkup
 
 from app.presentation.telegram.errors import report_service_error
+from app.presentation.telegram.keyboards.admin import build_add_access_keyboard
 
 STARTUP_MESSAGE = "✅ Bot ishga tushdi."
 NEW_USER_PREFIX = "🆕 Yangi foydalanuvchi"
+ADD_REQUEST_PREFIX = "🙋 Joy qo'shishga ruxsat so'rayapti"
 
 
 async def announce_startup(bot: Bot, admin_ids: tuple[int, ...]) -> None:
@@ -24,24 +27,48 @@ async def announce_new_user(
     user_id: int,
 ) -> None:
     """Tell the admins somebody opened the bot for the first time."""
-    # Telegram accepts accounts whose visible name is blank. The id is the one
-    # label that always exists, so the notice falls back to it.
-    name = full_name or str(user_id)
-    label = f"{name} (@{username})" if username else name
     await _tell_admins(
         bot,
         admin_ids,
-        f"{NEW_USER_PREFIX}: {label}\nID: {user_id}",
+        f"{NEW_USER_PREFIX}: {_label(full_name, username, user_id)}\nID: {user_id}",
         context="new user notice",
     )
 
 
+async def announce_add_request(
+    bot: Bot,
+    admin_ids: tuple[int, ...],
+    full_name: str,
+    username: str | None,
+    user_id: int,
+) -> None:
+    """Ask the admins to allow or refuse a driver who wants to add places."""
+    await _tell_admins(
+        bot,
+        admin_ids,
+        f"{ADD_REQUEST_PREFIX}: {_label(full_name, username, user_id)}\nID: {user_id}",
+        context="add access request",
+        reply_markup=build_add_access_keyboard(user_id),
+    )
+
+
+def _label(full_name: str, username: str | None, user_id: int) -> str:
+    # Telegram accepts accounts whose visible name is blank. The id is the one
+    # label that always exists, so the notice falls back to it.
+    name = full_name or str(user_id)
+    return f"{name} (@{username})" if username else name
+
+
 async def _tell_admins(
-    bot: Bot, admin_ids: tuple[int, ...], text: str, context: str
+    bot: Bot,
+    admin_ids: tuple[int, ...],
+    text: str,
+    context: str,
+    reply_markup: InlineKeyboardMarkup | None = None,
 ) -> None:
     for admin_id in admin_ids:
         try:
-            await bot.send_message(admin_id, text)
+            await bot.send_message(admin_id, text, reply_markup=reply_markup)
         except TelegramAPIError as error:
             # An admin who has never opened the bot has no chat to write to.
             report_service_error(error, f"{context} to admin {admin_id}")

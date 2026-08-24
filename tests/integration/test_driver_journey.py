@@ -9,6 +9,7 @@ row searchable.
 
 import pytest
 
+from app.application.use_cases.access import DecideAddAccessUseCase, RequestAddAccessUseCase
 from app.application.use_cases.admin import RecordSearchUseCase
 from app.application.use_cases.places import (
     AddPlaceUseCase,
@@ -17,6 +18,8 @@ from app.application.use_cases.places import (
     ListMyPlacesUseCase,
     NearbyPlacesUseCase,
 )
+from app.domain.value_objects.add_access import AddAccessStatus
+from app.infrastructure.database.sqlite_add_access import SQLiteAddAccessRepository
 from app.infrastructure.database.sqlite_places import SQLitePlaceRepository
 from app.infrastructure.database.sqlite_user_settings import SQLiteUserSettingsStore
 from app.infrastructure.repositories.in_memory_users import InMemoryUserRepository
@@ -33,11 +36,13 @@ from app.presentation.telegram.handlers.find_place import (
     handle_nearby_start,
     handle_text_query,
 )
+from app.presentation.telegram.handlers.admin import handle_allow_add
 from app.presentation.telegram.handlers.my_places import handle_confirm_delete, handle_my_places
 from app.presentation.telegram.handlers.settings import handle_settings_update
 from app.presentation.telegram.handlers.start import handle_cancel
 from app.presentation.telegram.states import AddPlace
 from tests.integration.telegram_doubles import (
+    FakeBot,
     FakeCallbackQuery,
     FakeLocationMessage,
     FakeMessage,
@@ -46,6 +51,8 @@ from tests.integration.telegram_doubles import (
 
 DRIVER = 42
 OTHER_DRIVER = 7
+ADMIN = 1
+NEWCOMER = 99
 
 # A fuel station on the M5 and a cafe eight kilometres up the road: far enough
 # apart that a 5 km radius sees one of them and a 10 km radius sees both.
@@ -60,6 +67,13 @@ class Journey:
         database = tmp_path / "journey.sqlite3"
         self.places = SQLitePlaceRepository(database)
         self.settings = SQLiteUserSettingsStore(database)
+        self.access = SQLiteAddAccessRepository(database)
+        self.request_add_access = RequestAddAccessUseCase(self.access)
+        self.decide_add_access = DecideAddAccessUseCase(self.access)
+        # The journey is about what approved drivers can do; the gate itself
+        # has its own test below.
+        for driver in (DRIVER, OTHER_DRIVER):
+            self.access.set_status(driver, AddAccessStatus.APPROVED)
         self.add_place = AddPlaceUseCase(self.places)
         self.find_places = FindPlacesUseCase(self.places)
         self.nearby_places = NearbyPlacesUseCase(self.places)
@@ -77,7 +91,9 @@ class Journey:
     ) -> FakeMessage:
         """Walk the whole add flow and return the message that closed it."""
         state = self.state if user_id == DRIVER else make_state(user_id)
-        await handle_add_place_start(FakeMessage(user_id=user_id), state)
+        await handle_add_place_start(
+            FakeMessage(user_id=user_id), state, self.request_add_access, admin_ids=()
+        )
         await handle_name(FakeMessage(text=name, user_id=user_id), state)
         await handle_category(
             FakeCallbackQuery(f"add_place:category:{category}", user_id=user_id), state
@@ -226,7 +242,9 @@ async def test_another_driver_cannot_delete_what_they_did_not_add(journey: Journ
 async def test_cancelling_halfway_saves_nothing(journey: Journey) -> None:
     # Task 27 step 7: abandoned at the location step, the flow leaves no row
     # and no state behind.
-    await handle_add_place_start(FakeMessage(), journey.state)
+    await handle_add_place_start(
+        FakeMessage(), journey.state, journey.request_add_access, admin_ids=()
+    )
     await handle_name(FakeMessage(text="Газпром"), journey.state)
     await handle_category(FakeCallbackQuery("add_place:category:fuel"), journey.state)
 
@@ -250,3 +268,32 @@ async def test_the_next_driver_finds_what_the_last_one_added(journey: Journey) -
     await journey.add("Кафе М5", "cafe", CAFE, user_id=OTHER_DRIVER)
 
     assert "Кафе М5" in replies(await journey.search("kafe m5"))
+
+
+async def test_adding_opens_only_after_the_admins_blessing(journey: Journey) -> None:
+    # A stranger's first tap does not start the flow; it files a request.
+    state = make_state(NEWCOMER)
+    bot = FakeBot()
+    first_try = FakeMessage(user_id=NEWCOMER)
+    await handle_add_place_start(
+        first_try, state, journey.request_add_access, admin_ids=(ADMIN,), bot=bot
+    )
+
+    assert await state.get_state() is None
+    assert [chat_id for chat_id, _ in bot.sent] == [ADMIN]
+
+    # The admin allows; the driver hears about it...
+    await handle_allow_add(
+        FakeCallbackQuery(f"admin:allow_add:{NEWCOMER}", user_id=ADMIN),
+        (ADMIN,),
+        journey.decide_add_access,
+        bot,
+    )
+    assert bot.sent[-1][0] == NEWCOMER
+
+    # ...and the same tap now opens the flow.
+    second_try = FakeMessage(user_id=NEWCOMER)
+    await handle_add_place_start(
+        second_try, state, journey.request_add_access, admin_ids=(ADMIN,), bot=bot
+    )
+    assert await state.get_state() == AddPlace.name.state
