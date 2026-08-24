@@ -75,9 +75,14 @@ def format_place_preview(
     )
 
 
+ROAD_DISTANCE_NOTE = "yo'l bo'yicha"
+STRAIGHT_DISTANCE_NOTE = "to'g'ri chiziq bo'yicha"
+
+
 def format_place_results(
     places: list[Place],
     distances_meters: list[float] | None = None,
+    distance_note: str | None = None,
 ) -> str:
     if not places:
         return NO_RESULTS_MESSAGE
@@ -96,7 +101,11 @@ def format_place_results(
         # short list is still safe to render — the places past its end simply
         # have no distance line.
         if distances_meters is not None and index <= len(distances_meters):
-            lines.append(f"   {_format_distance(distances_meters[index - 1])}")
+            # The note says what kind of distance this is: a road distance and
+            # a straight line can differ by a river's worth of kilometres.
+            distance = _format_distance(distances_meters[index - 1])
+            suffix = f" · {distance_note}" if distance_note else ""
+            lines.append(f"   {distance}{suffix}")
         if place.note:
             lines.append(f"   📝 {html.escape(place.note)}")
         lines.append("")

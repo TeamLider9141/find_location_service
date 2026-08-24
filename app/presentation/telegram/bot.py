@@ -31,7 +31,9 @@ from app.config.settings import Settings
 from app.domain.interfaces.add_access import AddAccessRepository
 from app.domain.interfaces.deletions import DeletionLog
 from app.domain.interfaces.places import PlaceRepository
+from app.domain.interfaces.routing import RoadRouter
 from app.domain.interfaces.users import UserRepository
+from app.infrastructure.routing.osrm import OsrmRouter
 from app.infrastructure.database.sqlite_add_access import SQLiteAddAccessRepository
 from app.infrastructure.database.sqlite_deletions import SQLiteDeletionLog
 from app.infrastructure.database.sqlite_places import SQLitePlaceRepository
@@ -53,6 +55,7 @@ def create_dispatcher(
     deletions: DeletionLog,
     admin_ids: tuple[int, ...] = (),
     super_admin_ids: tuple[int, ...] = (),
+    road_router: RoadRouter | None = None,
 ) -> Dispatcher:
     # Supers are admins too: one variable answers "may they open the panel",
     # the other answers "may they delete and broadcast".
@@ -81,6 +84,7 @@ def create_dispatcher(
         revoke_add_access=RevokeAddAccessUseCase(add_access),
         admin_ids=all_admins,
         super_admin_ids=super_admin_ids,
+        road_router=road_router,
     )
 
     # Throttling goes on first, so a flood is dropped before it reaches the
@@ -116,6 +120,14 @@ def create_place_repository(settings: Settings) -> PlaceRepository:
 def create_add_access_repository(settings: Settings) -> AddAccessRepository:
     # Same file again: a permission granted before a deploy must survive it.
     return SQLiteAddAccessRepository(settings.database_path)
+
+
+def create_road_router(settings: Settings) -> RoadRouter | None:
+    # None — not a dead router — when routing is switched off, so the nearby
+    # handler shows no wait notice for a call that will never be made.
+    if not settings.osrm_base_url:
+        return None
+    return OsrmRouter(settings.osrm_base_url)
 
 
 def create_deletion_log(settings: Settings) -> DeletionLog:

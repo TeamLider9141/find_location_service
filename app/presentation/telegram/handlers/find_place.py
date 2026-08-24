@@ -21,7 +21,12 @@ from app.presentation.telegram.errors import (
     report_service_error,
     user_id_of,
 )
+from aiogram.exceptions import TelegramAPIError
+
+from app.domain.interfaces.routing import RoadRouter
 from app.presentation.telegram.formatters import (
+    ROAD_DISTANCE_NOTE,
+    STRAIGHT_DISTANCE_NOTE,
     format_place_card,
     format_place_results,
 )
@@ -134,6 +139,7 @@ async def handle_nearby_location(
     state: FSMContext,
     nearby_places: NearbyPlacesUseCase,
     user_settings: UserSettingsStore,
+    road_router: RoadRouter | None = None,
 ) -> None:
     coordinates = _coordinates_from_message(message)
     user_id = user_id_of(message)
@@ -143,10 +149,12 @@ async def handle_nearby_location(
 
     settings = user_settings.get(user_id)
     try:
+        # More candidates than the driver will see: the nearest by road is not
+        # always the nearest by air, so the re-sort needs room to promote.
         places = nearby_places.execute(
             coordinates,
             radius_meters=settings.nearby_radius_meters,
-            limit=settings.result_limit,
+            limit=max(settings.result_limit, ROAD_CANDIDATES),
         )
     except sqlite3.Error as error:
         report_service_error(error, "nearby search")
@@ -155,8 +163,59 @@ async def handle_nearby_location(
         return
 
     await state.clear()
-    distances = [coordinates.distance_to(place.coordinates) for place in places]
-    await _send_results(message, places, distances)
+
+    if not places:
+        await _send_results(message, [])
+        return
+
+    places, distances, note = await _by_road_or_by_air(
+        message, road_router, coordinates, places
+    )
+    limit = settings.result_limit
+    await _send_results(message, places[:limit], distances[:limit], note)
+
+
+# Enough for the re-sort to matter, few enough for one routing request.
+ROAD_CANDIDATES = 15
+SEARCHING_MESSAGE = "⏳ Iltimos kuting — eng yaqin manzillarni qidiryapmiz..."
+
+
+async def _by_road_or_by_air(
+    message: Message,
+    road_router: RoadRouter | None,
+    origin: Coordinates,
+    places: list,
+) -> tuple[list, list[float], str]:
+    """Sort by road distance when the router answers, by air when it cannot.
+
+    The fallback is silent by design: a slow routing service is the routing
+    service's problem, not the driver's.
+    """
+    straight = [origin.distance_to(place.coordinates) for place in places]
+
+    if road_router is None:
+        return places, straight, STRAIGHT_DISTANCE_NOTE
+
+    waiting = await message.answer(SEARCHING_MESSAGE)
+    by_road = await road_router.road_distances(
+        origin, [place.coordinates for place in places]
+    )
+    # The wait notice has served its purpose; the results speak next. A double
+    # that returns nothing from answer() simply keeps its notice.
+    try:
+        await waiting.delete()
+    except (AttributeError, TelegramAPIError):
+        pass
+
+    if by_road is None:
+        return places, straight, STRAIGHT_DISTANCE_NOTE
+
+    paired = sorted(zip(by_road, places), key=lambda item: item[0])
+    return (
+        [place for _, place in paired],
+        [distance for distance, _ in paired],
+        ROAD_DISTANCE_NOTE,
+    )
 
 
 @router.callback_query(F.data.startswith("place:"))
@@ -216,13 +275,13 @@ async def handle_text_query(
     await _send_results(message, places)
 
 
-async def _send_results(message, places, distances=None) -> None:
+async def _send_results(message, places, distances=None, distance_note=None) -> None:
     if not places:
         await message.answer(format_place_results([]))
         return
 
     await message.answer(
-        format_place_results(places, distances),
+        format_place_results(places, distances, distance_note),
         reply_markup=build_place_results_keyboard([place.id for place in places]),
         parse_mode="HTML",
         # Every result carries its own link already; ten link previews under

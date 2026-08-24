@@ -12,6 +12,9 @@ class Settings:
     # super admins additionally delete places and broadcast.
     admin_ids: tuple[int, ...] = ()
     super_admin_ids: tuple[int, ...] = ()
+    # The OSRM server for road distances in the nearby search. Blank disables
+    # routing entirely: distances fall back to the straight line, labelled so.
+    osrm_base_url: str = "https://router.project-osrm.org"
 
     # These repeat the defaults in the throttling middleware rather than import
     # them: config must not depend on the presentation layer. A test asserts the
@@ -40,6 +43,7 @@ class Settings:
             database_path=values.get("DATABASE_PATH", cls.database_path),
             admin_ids=_read_admin_ids(values.get("ADMIN_IDS", "")),
             super_admin_ids=_read_admin_ids(values.get("SUPER_ADMIN_IDS", "")),
+            osrm_base_url=values.get("OSRM_BASE_URL", cls.osrm_base_url).strip(),
             throttle_burst=_read_number(
                 values.get("THROTTLE_BURST"), cls.throttle_burst, int, minimum=1
             ),

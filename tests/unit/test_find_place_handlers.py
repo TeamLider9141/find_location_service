@@ -555,3 +555,74 @@ async def test_the_border_group_opens_instead_of_searching() -> None:
     keyboard = callback.message.answers[0]["reply_markup"]
     data = [row[0].callback_data for row in keyboard.inline_keyboard]
     assert data == ["find:category:border_kz", "find:category:border_ru"]
+
+
+class FakeRoadRouter:
+    def __init__(self, distances: list[float] | None) -> None:
+        self._distances = distances
+        self.asked: list[tuple[float, float]] = []
+
+    async def road_distances(self, origin, destinations):
+        self.asked = [(point.latitude, point.longitude) for point in destinations]
+        return self._distances
+
+
+async def _nearby(message, repository, road_router=None) -> None:
+    state = make_state()
+    await state.set_state(NearbyPlace.location)
+    await handle_nearby_location(
+        message,
+        state,
+        nearby_places=NearbyPlacesUseCase(repository),
+        user_settings=InMemoryUserSettingsStore(),
+        road_router=road_router,
+    )
+
+
+async def test_nearby_resorts_by_road_distance() -> None:
+    # The nearest by air is across the river; by road the other one wins.
+    repository = seeded_repository()  # Газпром ~110 m, Кафе ~2.2 km by air
+    message = FakeMessage()
+    message.location = FakeLocation(latitude=55.7500, longitude=37.6100)
+    router = FakeRoadRouter([15_000.0, 3_000.0])
+
+    await _nearby(message, repository, router)
+
+    text = str(message.answers[-1]["text"])
+    assert text.index("Кафе") < text.index("Газпром")
+    assert "3.0 km" in text
+    assert "yo'l bo'yicha" in text
+
+
+async def test_the_driver_is_told_to_wait_while_roads_are_measured() -> None:
+    repository = seeded_repository()
+    message = FakeMessage()
+    message.location = FakeLocation(latitude=55.7500, longitude=37.6100)
+
+    await _nearby(message, repository, FakeRoadRouter([100.0, 200.0]))
+
+    assert "kuting" in str(message.answers[0]["text"]).lower()
+
+
+async def test_a_dead_routing_service_falls_back_to_the_straight_line() -> None:
+    repository = seeded_repository()
+    message = FakeMessage()
+    message.location = FakeLocation(latitude=55.7500, longitude=37.6100)
+
+    await _nearby(message, repository, FakeRoadRouter(None))
+
+    text = str(message.answers[-1]["text"])
+    assert text.index("Газпром") < text.index("Кафе")
+    assert "to'g'ri chiziq bo'yicha" in text
+
+
+async def test_without_a_router_there_is_no_wait_notice() -> None:
+    # No call will be made, so there is nothing to wait for.
+    repository = seeded_repository()
+    message = FakeMessage()
+    message.location = FakeLocation(latitude=55.7500, longitude=37.6100)
+
+    await _nearby(message, repository, road_router=None)
+
+    assert all("kuting" not in str(answer["text"]).lower() for answer in message.answers)
+    assert "to'g'ri chiziq bo'yicha" in str(message.answers[-1]["text"])

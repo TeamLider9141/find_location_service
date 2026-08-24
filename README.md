@@ -15,7 +15,9 @@ added it.
 - Search by name across Latin and Cyrillic spellings
 - Browse by category — each button carries its place count; empty categories
   keep a plain label
-- Find places near your current location, sorted by distance
+- Find places near your current location, sorted by road distance when the OSRM
+  routing server answers — the nearest place by air is not always the nearest by
+  road — and by labelled straight-line distance when it does not
 - Manage the places you contributed — change category, delete
 - Per-user settings for search radius and result count, kept across restarts
 - Admin panel — statistics, user list, per-user detail with a map link for every
@@ -63,6 +65,7 @@ Settings are read from `.env`; environment variables override it when both are p
 | `DATABASE_PATH` | SQLite file. Defaults to `data/find_location.sqlite3`. |
 | `ADMIN_IDS` | Comma separated ids of ordinary admins: view the panel, approve and revoke add permissions. |
 | `SUPER_ADMIN_IDS` | Comma separated ids of super admins: everything above, plus delete and broadcast. |
+| `OSRM_BASE_URL` | OSRM server for road distances in the nearby search. Defaults to the public demo server; blank disables routing. |
 | `THROTTLE_BURST` | Messages a driver may send back to back. Defaults to 5, minimum 1. |
 | `THROTTLE_REFILL_PER_SECOND` | Messages a second a driver earns back. Defaults to 1.0, must be above 0. |
 | `THROTTLE_WARNING_SECONDS` | Seconds between two throttle replies. Defaults to 10; 0 answers every dropped message. |

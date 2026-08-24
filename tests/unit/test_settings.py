@@ -117,6 +117,18 @@ def test_all_admin_ids_joins_both_rungs_without_repeats() -> None:
     assert settings.all_admin_ids == (111, 222, 333)
 
 
+def test_the_osrm_url_defaults_to_the_public_server() -> None:
+    settings = Settings.from_sources(env={}, dotenv_path=None)
+
+    assert settings.osrm_base_url == "https://router.project-osrm.org"
+
+
+def test_a_blank_osrm_url_disables_routing() -> None:
+    settings = Settings.from_sources(env={"OSRM_BASE_URL": "  "}, dotenv_path=None)
+
+    assert settings.osrm_base_url == ""
+
+
 def test_without_admin_ids_nobody_is_an_admin() -> None:
     settings = Settings.from_sources(env={}, dotenv_path=None)
 
