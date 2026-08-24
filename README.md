@@ -25,8 +25,9 @@ added it.
   the same on both rungs — a super-only button refuses the tap with an alert
 - Per-driver rate limit: bursts of five messages pass, anything faster is dropped
   with one warning
-- Both admin rungs are messaged when the bot starts, when a new user first opens
-  the bot, and when somebody asks for permission to add places
+- Both admin rungs are messaged when a new user first opens the bot and when
+  somebody asks for permission to add places; the startup notice goes to super
+  admins only — restarts are routine and the ordinary rung cannot act on them
 
 Seven categories: restaurant, cafe, fuel, hotel, parking, car service, and `other` as a
 fallback — a place filed under a category it does not belong to is worse than one filed

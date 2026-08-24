@@ -39,7 +39,9 @@ async def run_bot() -> int:
     )
     try:
         await configure_commands(bot, settings.all_admin_ids)
-        await announce_startup(bot, settings.all_admin_ids)
+        # Supers only: restarts are routine — deploys, cron — and the ordinary
+        # rung can do nothing about them anyway.
+        await announce_startup(bot, settings.super_admin_ids)
         await dispatcher.start_polling(bot)
     finally:
         await bot.session.close()
