@@ -222,3 +222,13 @@ def test_a_zero_idle_window_is_refused() -> None:
     settings = Settings.from_sources(env={"THROTTLE_IDLE_SECONDS": "0"}, dotenv_path=None)
 
     assert settings.throttle_idle_seconds == IDLE_SECONDS
+
+
+def test_a_google_key_is_read_and_defaults_to_blank() -> None:
+    bare = Settings.from_sources(env={}, dotenv_path=None)
+    keyed = Settings.from_sources(
+        env={"GOOGLE_MAPS_API_KEY": " abc123 "}, dotenv_path=None
+    )
+
+    assert bare.google_maps_api_key == ""
+    assert keyed.google_maps_api_key == "abc123"

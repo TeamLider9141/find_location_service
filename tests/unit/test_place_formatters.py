@@ -126,10 +126,12 @@ def test_results_pair_each_distance_with_its_own_place() -> None:
 
 
 def test_results_without_distances_stay_a_plain_list() -> None:
+    import re
+
     text = format_place_results([make_place()])
 
-    assert " m" not in text
-    assert "km" not in text
+    # No distance line at all — "140 m" or "1.2 km" would be an invention.
+    assert re.search(r"\d+(\.\d+)? (m|km)\b", text) is None
 
 
 def test_results_include_notes() -> None:
@@ -144,3 +146,12 @@ def test_empty_results_explain_the_database_is_the_only_source() -> None:
     assert "topilmadi" in text.lower()
     # The invitation is the point: nothing else fills the database.
     assert "qo'shish" in text.lower()
+
+
+def test_every_result_offers_a_navigator_route() -> None:
+    # Our number is an estimate; the Yandex link is the navigator's own route,
+    # on the map that actually knows the local roads.
+    text = format_place_results([make_place()])
+
+    assert 'href="https://yandex.com/maps/?rtext=~55.75,37.61&rtt=auto"' in text
+    assert "Yandex marshrut" in text

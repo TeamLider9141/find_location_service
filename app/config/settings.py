@@ -15,6 +15,9 @@ class Settings:
     # The OSRM server for road distances in the nearby search. Blank disables
     # routing entirely: distances fall back to the straight line, labelled so.
     osrm_base_url: str = "https://router.project-osrm.org"
+    # A Google Routes API key puts Google first in the routing chain, with
+    # OSRM as the fallback. Blank means Google is simply not asked.
+    google_maps_api_key: str = ""
 
     # These repeat the defaults in the throttling middleware rather than import
     # them: config must not depend on the presentation layer. A test asserts the
@@ -44,6 +47,7 @@ class Settings:
             admin_ids=_read_admin_ids(values.get("ADMIN_IDS", "")),
             super_admin_ids=_read_admin_ids(values.get("SUPER_ADMIN_IDS", "")),
             osrm_base_url=values.get("OSRM_BASE_URL", cls.osrm_base_url).strip(),
+            google_maps_api_key=values.get("GOOGLE_MAPS_API_KEY", "").strip(),
             throttle_burst=_read_number(
                 values.get("THROTTLE_BURST"), cls.throttle_burst, int, minimum=1
             ),

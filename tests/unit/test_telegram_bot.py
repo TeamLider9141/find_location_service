@@ -133,3 +133,22 @@ def test_the_settings_store_survives_a_restart(dispatcher: Dispatcher) -> None:
     # Handed in rather than built inside: an in-memory store would silently
     # reset every driver's radius on each deploy.
     assert dispatcher.workflow_data["user_settings"] is SETTINGS
+
+
+def test_the_routing_chain_matches_what_is_configured() -> None:
+    from app.infrastructure.routing.chain import FirstAnsweringRouter
+    from app.infrastructure.routing.google_routes import GoogleRoutesRouter
+    from app.infrastructure.routing.osrm import OsrmRouter
+    from app.presentation.telegram.bot import create_road_router
+
+    nothing = Settings(osrm_base_url="", google_maps_api_key="")
+    osrm_only = Settings(osrm_base_url="https://osrm.example", google_maps_api_key="")
+    both = Settings(osrm_base_url="https://osrm.example", google_maps_api_key="key")
+
+    assert create_road_router(nothing) is None
+    assert isinstance(create_road_router(osrm_only), OsrmRouter)
+    assert isinstance(create_road_router(both), FirstAnsweringRouter)
+    # Preference order: the better map first, the free fallback after it.
+    chained = create_road_router(both)
+    assert isinstance(chained._routers[0], GoogleRoutesRouter)
+    assert isinstance(chained._routers[1], OsrmRouter)

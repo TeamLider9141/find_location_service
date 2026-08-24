@@ -33,6 +33,8 @@ from app.domain.interfaces.deletions import DeletionLog
 from app.domain.interfaces.places import PlaceRepository
 from app.domain.interfaces.routing import RoadRouter
 from app.domain.interfaces.users import UserRepository
+from app.infrastructure.routing.chain import FirstAnsweringRouter
+from app.infrastructure.routing.google_routes import GoogleRoutesRouter
 from app.infrastructure.routing.osrm import OsrmRouter
 from app.infrastructure.database.sqlite_add_access import SQLiteAddAccessRepository
 from app.infrastructure.database.sqlite_deletions import SQLiteDeletionLog
@@ -123,11 +125,20 @@ def create_add_access_repository(settings: Settings) -> AddAccessRepository:
 
 
 def create_road_router(settings: Settings) -> RoadRouter | None:
-    # None — not a dead router — when routing is switched off, so the nearby
-    # handler shows no wait notice for a call that will never be made.
-    if not settings.osrm_base_url:
+    # Preference order: Google's map first when a key is configured, OSRM
+    # after it. None — not a dead router — when both are switched off, so the
+    # nearby handler shows no wait notice for a call that will never be made.
+    routers: list[RoadRouter] = []
+    if settings.google_maps_api_key:
+        routers.append(GoogleRoutesRouter(settings.google_maps_api_key))
+    if settings.osrm_base_url:
+        routers.append(OsrmRouter(settings.osrm_base_url))
+
+    if not routers:
         return None
-    return OsrmRouter(settings.osrm_base_url)
+    if len(routers) == 1:
+        return routers[0]
+    return FirstAnsweringRouter(tuple(routers))
 
 
 def create_deletion_log(settings: Settings) -> DeletionLog:

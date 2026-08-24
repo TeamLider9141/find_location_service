@@ -43,6 +43,17 @@ def place_map_link(place: Place) -> str:
     return f"https://www.google.com/maps/search/?api=1&query={latitude},{longitude}"
 
 
+def yandex_route_link(place: Place) -> str:
+    """A ready-to-drive route in the navigator with the best local map.
+
+    ``rtext=~lat,lon`` reads as "from wherever I am, to here"; ``rtt=auto``
+    asks for a driving route.
+    """
+    latitude = place.coordinates.latitude
+    longitude = place.coordinates.longitude
+    return f"https://yandex.com/maps/?rtext=~{latitude},{longitude}&rtt=auto"
+
+
 def format_place_card(place: Place) -> str:
     return format_place_preview(
         name=place.name,
@@ -111,6 +122,9 @@ def format_place_results(
             lines.append(f"   {distance}{suffix}")
         if place.note:
             lines.append(f"   📝 {html.escape(place.note)}")
+        # Our number is an estimate; this link is the navigator's own route,
+        # on the map that actually knows the local roads.
+        lines.append(f'   🧭 <a href="{yandex_route_link(place)}">Yandex marshrut</a>')
         lines.append("")
 
     return "\n".join(lines).rstrip()
