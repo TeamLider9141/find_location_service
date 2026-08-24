@@ -98,3 +98,23 @@ def test_every_button_sits_in_its_own_row() -> None:
 
     for keyboard in keyboards:
         assert all(len(row) == 1 for row in keyboard.inline_keyboard)
+
+
+def test_a_place_that_fits_nothing_else_has_a_category() -> None:
+    # Without a fallback a driver either abandons the place or files it under a
+    # category it does not belong to, and the second is worse: everyone
+    # searching that category now gets a wrong answer.
+    keyboard = build_category_choice_keyboard("add_place:category")
+
+    assert f"add_place:category:{PlaceCategory.OTHER.value}" in _callback_data(keyboard)
+
+
+def test_the_fallback_category_is_offered_last() -> None:
+    # "Boshqa" first would invite a driver to skip reading the real categories.
+    keyboard = build_category_choice_keyboard("pick")
+
+    assert _callback_data(keyboard)[-1] == f"pick:{PlaceCategory.OTHER.value}"
+
+
+def test_the_fallback_category_is_labelled_in_uzbek() -> None:
+    assert category_label(PlaceCategory.OTHER) == "📌 Boshqa kategoriya"

@@ -236,6 +236,14 @@ async def test_cancelling_halfway_saves_nothing(journey: Journey) -> None:
     assert journey.list_my_places.execute(DRIVER) == []
 
 
+async def test_a_place_in_no_particular_category_is_still_findable(journey: Journey) -> None:
+    # The fallback category has to survive the round trip like any other: it is
+    # stored as a plain string, so a typo in the enum would only surface here.
+    await journey.add("Bozor", "other", STATION)
+
+    assert "Bozor" in replies(await journey.search("bozor"))
+
+
 async def test_the_next_driver_finds_what_the_last_one_added(journey: Journey) -> None:
     # The point of the shared database: a place exists because somebody else
     # bothered to add it.

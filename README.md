@@ -23,7 +23,9 @@ added it.
   with one warning
 - Every id in `ADMIN_IDS` is messaged when the bot starts, so a restart is not silent
 
-Six categories: restaurant, cafe, fuel, hotel, parking, car service.
+Seven categories: restaurant, cafe, fuel, hotel, parking, car service, and `other` as a
+fallback — a place filed under a category it does not belong to is worse than one filed
+under none.
 
 ## Architecture
 

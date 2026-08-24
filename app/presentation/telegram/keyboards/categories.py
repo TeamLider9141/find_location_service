@@ -7,6 +7,7 @@ CATEGORY_LABELS: dict[PlaceCategory, str] = {
     PlaceCategory.HOTEL: "🏨 Mehmonxona",
     PlaceCategory.PARKING: "🅿️ Parking",
     PlaceCategory.CAR_SERVICE: "🔧 Usta / servis",
+    PlaceCategory.OTHER: "📌 Boshqa kategoriya",
 }
 
 
