@@ -204,6 +204,10 @@ async def _send_results(message, places, distances=None) -> None:
     await message.answer(
         format_place_results(places, distances),
         reply_markup=build_place_results_keyboard([place.id for place in places]),
+        parse_mode="HTML",
+        # Every result carries its own link already; ten link previews under
+        # one list would bury the list itself.
+        disable_web_page_preview=True,
     )
 
 

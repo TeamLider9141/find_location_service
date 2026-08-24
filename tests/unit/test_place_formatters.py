@@ -58,9 +58,9 @@ def test_place_card_links_to_the_place_not_the_null_island() -> None:
     assert "query=55.75,37.61" in text
 
 
-def test_every_result_carries_its_own_map_link() -> None:
-    # The numbered buttons open a card, but the link in the text is one tap
-    # fewer — a driver mid-route does not want a detour through a menu.
+def test_every_result_name_is_its_own_map_link() -> None:
+    # The name is the link: tapping the line the driver is already reading
+    # beats hunting a raw URL under it.
     text = format_place_results(
         [
             make_place(place_id=1, name="Газпром"),
@@ -68,7 +68,18 @@ def test_every_result_carries_its_own_map_link() -> None:
         ]
     )
 
-    assert text.count("https://www.google.com/maps/search/?api=1&query=") == 2
+    assert text.count('<a href="https://www.google.com/maps/search/?api=1&query=') == 2
+    assert ">Газпром</a>" in text
+    assert ">Кафе</a>" in text
+
+
+def test_a_name_with_html_in_it_cannot_break_the_message() -> None:
+    # Names are driver input; an unescaped < or & would make Telegram refuse
+    # the whole message, taking every other result down with it.
+    text = format_place_results([make_place(name="<Кафе & Бар>")])
+
+    assert "&lt;Кафе &amp; Бар&gt;" in text
+    assert "<Кафе" not in text
 
 
 def test_results_are_numbered_and_show_categories() -> None:
@@ -79,8 +90,8 @@ def test_results_are_numbered_and_show_categories() -> None:
         ]
     )
 
-    assert "1. Газпром" in text
-    assert "2. Кафе" in text
+    assert "1. " in text
+    assert "2. " in text
     assert "☕" in text
 
 

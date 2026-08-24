@@ -152,6 +152,23 @@ async def test_a_counting_failure_does_not_block_the_search() -> None:
     assert keyboard.inline_keyboard
 
 
+async def test_results_go_out_as_html_without_link_previews() -> None:
+    # The names are <a> links now: without parse_mode the driver would see raw
+    # tags, and without the preview switch ten link cards would bury the list.
+    message = FakeMessage(text="gazprom")
+
+    await handle_text_query(
+        message,
+        find_places=FindPlacesUseCase(seeded_repository()),
+        user_settings=InMemoryUserSettingsStore(),
+        record_search=RecordSearchUseCase(InMemoryUserRepository()),
+    )
+
+    answer = message.answers[0]
+    assert answer["parse_mode"] == "HTML"
+    assert answer["disable_web_page_preview"] is True
+
+
 async def test_text_query_finds_a_place_across_alphabets() -> None:
     # The whole point of normalizing names: a driver typing on a Latin keyboard
     # finds what another driver added in Cyrillic.

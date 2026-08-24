@@ -1,3 +1,5 @@
+import html
+
 from app.domain.entities.place import Place
 from app.domain.value_objects.user_settings import UserSettings
 from app.presentation.telegram.keyboards.categories import category_label
@@ -57,9 +59,15 @@ def format_place_results(
     if not places:
         return NO_RESULTS_MESSAGE
 
+    # The list goes out with parse_mode="HTML", so everything a driver typed —
+    # names, notes — is escaped: one "<" in a name would otherwise make
+    # Telegram refuse the whole message.
     lines: list[str] = []
     for index, place in enumerate(places, start=1):
-        lines.append(f"{index}. {place.name}")
+        # The name is the link: tapping the line the driver is already reading
+        # beats hunting a raw URL under it.
+        name = html.escape(place.name)
+        lines.append(f'{index}. <a href="{place_map_link(place)}">{name}</a>')
         lines.append(f"   {category_label(place.category)}")
         # nearby() supplies one distance per place; search() supplies none. A
         # short list is still safe to render — the places past its end simply
@@ -67,10 +75,7 @@ def format_place_results(
         if distances_meters is not None and index <= len(distances_meters):
             lines.append(f"   {_format_distance(distances_meters[index - 1])}")
         if place.note:
-            lines.append(f"   📝 {place.note}")
-        # The numbered buttons open a card, but the link right here is one tap
-        # fewer — a driver mid-route does not want a detour through a menu.
-        lines.append(f"   {place_map_link(place)}")
+            lines.append(f"   📝 {html.escape(place.note)}")
         lines.append("")
 
     return "\n".join(lines).rstrip()
