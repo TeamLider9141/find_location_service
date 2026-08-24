@@ -1,7 +1,7 @@
 import sqlite3
 
 import pytest
-from aiogram.exceptions import TelegramForbiddenError
+from aiogram.exceptions import TelegramForbiddenError, TelegramRetryAfter
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.storage.base import StorageKey
 from aiogram.fsm.storage.memory import MemoryStorage
@@ -19,9 +19,11 @@ from app.domain.value_objects.category import PlaceCategory
 from app.domain.value_objects.coordinates import Coordinates
 from app.infrastructure.repositories.in_memory_places import InMemoryPlaceRepository
 from app.infrastructure.repositories.in_memory_users import InMemoryUserRepository
+from app.presentation.telegram.handlers import admin as admin_handlers
 from app.presentation.telegram.handlers.admin import (
     ASK_BROADCAST_MESSAGE,
     BROADCAST_CANCELLED_MESSAGE,
+    SEND_INTERVAL_SECONDS,
     DATABASE_ERROR_MESSAGE,
     DELETED_MESSAGE,
     INVALID_SELECTION_MESSAGE,
@@ -83,14 +85,38 @@ class FakeCallbackQuery:
 
 
 class FakeBot:
-    def __init__(self, blocked: set[int] | None = None) -> None:
+    def __init__(
+        self,
+        blocked: set[int] | None = None,
+        flood: dict[int, int] | None = None,
+    ) -> None:
         self.sent: list[tuple[int, str]] = []
         self._blocked = blocked or set()
+        # chat id -> how many more times sending to it hits flood control.
+        self._flood = dict(flood or {})
 
     async def send_message(self, chat_id: int, text: str, **_: object) -> None:
         if chat_id in self._blocked:
             raise TelegramForbiddenError(method=None, message="bot was blocked by the user")
+
+        remaining = self._flood.get(chat_id, 0)
+        if remaining:
+            self._flood[chat_id] = remaining - 1
+            raise TelegramRetryAfter(method=None, message="flood control", retry_after=4)
+
         self.sent.append((chat_id, text))
+
+
+@pytest.fixture
+def sleeps(monkeypatch) -> list[float]:
+    """Record what the broadcast waits for instead of actually waiting."""
+    recorded: list[float] = []
+
+    async def fake_sleep(seconds: float) -> None:
+        recorded.append(seconds)
+
+    monkeypatch.setattr(admin_handlers.asyncio, "sleep", fake_sleep)
+    return recorded
 
 
 class ExplodingPlaces(InMemoryPlaceRepository):
@@ -452,3 +478,70 @@ async def test_an_expired_panel_message_does_not_crash(places, users) -> None:
     await handle_admin_home(callback, admin_ids=ADMIN_IDS)
 
     assert callback.alerts != []
+
+
+async def test_the_broadcast_paces_itself_between_sends(places, users, sleeps) -> None:
+    # Telegram caps bots at about 30 messages a second. A tight loop over a few
+    # hundred drivers earns a 429 partway through and loses the rest.
+    state = make_state()
+    await state.update_data(broadcast_text="Salom")
+    for user_id in (1, 2, 3):
+        users.record_seen(user_id, full_name="U", username=None)
+    bot = FakeBot()
+
+    await handle_broadcast_send(
+        FakeCallbackQuery("admin:broadcast:send"),
+        state=state,
+        bot=bot,
+        admin_ids=ADMIN_IDS,
+        broadcast_recipients=ListBroadcastRecipientsUseCase(users),
+    )
+
+    assert sleeps == [SEND_INTERVAL_SECONDS] * 3
+
+
+async def test_flood_control_is_waited_out_rather_than_counted_as_failed(
+    places,
+    users,
+    sleeps,
+) -> None:
+    state = make_state()
+    await state.update_data(broadcast_text="Salom")
+    for user_id in (1, 2):
+        users.record_seen(user_id, full_name="U", username=None)
+    bot = FakeBot(flood={2: 1})
+    callback = FakeCallbackQuery("admin:broadcast:send")
+
+    await handle_broadcast_send(
+        callback,
+        state=state,
+        bot=bot,
+        admin_ids=ADMIN_IDS,
+        broadcast_recipients=ListBroadcastRecipientsUseCase(users),
+    )
+
+    assert sorted(chat_id for chat_id, _ in bot.sent) == [1, 2]
+    assert 4 in sleeps
+    assert "Yetib bormadi: 0 ta" in callback.texts[-1]
+
+
+async def test_a_second_flood_error_for_one_driver_gives_up(places, users, sleeps) -> None:
+    # One retry, not a loop: a driver Telegram keeps refusing must not hold the
+    # whole broadcast hostage.
+    state = make_state()
+    await state.update_data(broadcast_text="Salom")
+    for user_id in (1, 2):
+        users.record_seen(user_id, full_name="U", username=None)
+    bot = FakeBot(flood={1: 5})
+    callback = FakeCallbackQuery("admin:broadcast:send")
+
+    await handle_broadcast_send(
+        callback,
+        state=state,
+        bot=bot,
+        admin_ids=ADMIN_IDS,
+        broadcast_recipients=ListBroadcastRecipientsUseCase(users),
+    )
+
+    assert [chat_id for chat_id, _ in bot.sent] == [2]
+    assert "Yetib bormadi: 1 ta" in callback.texts[-1]

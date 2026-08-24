@@ -1,7 +1,8 @@
+import asyncio
 import sqlite3
 
 from aiogram import Bot, F, Router
-from aiogram.exceptions import TelegramAPIError
+from aiogram.exceptions import TelegramAPIError, TelegramRetryAfter
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
@@ -52,6 +53,8 @@ DELETE_PROMPT_MESSAGE = "Bu joyni bazadan butunlay o'chiraymi?"
 ASK_BROADCAST_MESSAGE = "Yuboriladigan xabar matnini yozing. Bekor qilish uchun /cancel."
 BROADCAST_CANCELLED_MESSAGE = "Xabar yuborish bekor qilindi."
 TOP_SEARCHES_LIMIT = 10
+# ~20 messages a second, under Telegram's ~30/s ceiling for bots.
+SEND_INTERVAL_SECONDS = 0.05
 
 _BROADCAST_TEXT_KEY = "broadcast_text"
 
@@ -347,17 +350,40 @@ async def _deliver(bot: Bot, recipients: list[int], text: str) -> tuple[int, int
     sent = 0
     failed = 0
     for chat_id in recipients:
+        if await _send_one(bot, chat_id, text):
+            sent += 1
+        else:
+            failed += 1
+
+        # Telegram caps bots near 30 messages a second. Pacing the loop costs a
+        # few seconds on a large list and avoids losing its tail to a 429.
+        await asyncio.sleep(SEND_INTERVAL_SECONDS)
+
+    return sent, failed
+
+
+async def _send_one(bot: Bot, chat_id: int, text: str) -> bool:
+    """Send to one driver, waiting out flood control once. True if delivered."""
+    for attempt in range(2):
         try:
             await bot.send_message(chat_id, text)
+        except TelegramRetryAfter as error:
+            # Telegram says exactly how long to wait, so this one is worth
+            # retrying — unlike a block, which will never succeed.
+            report_service_error(error, f"broadcast to {chat_id}")
+            if attempt == 0:
+                await asyncio.sleep(error.retry_after)
+                continue
+            return False
         except TelegramAPIError as error:
             # Blocked bots and deleted accounts are the normal case here. One
             # unreachable driver must not silence everyone after them.
             report_service_error(error, f"broadcast to {chat_id}")
-            failed += 1
+            return False
         else:
-            sent += 1
+            return True
 
-    return sent, failed
+    return False
 
 
 async def _open(callback_query: CallbackQuery, admin_ids: tuple[int, ...]) -> Message | None:
