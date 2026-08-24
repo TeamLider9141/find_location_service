@@ -68,6 +68,9 @@ def format_place_results(
             lines.append(f"   {_format_distance(distances_meters[index - 1])}")
         if place.note:
             lines.append(f"   📝 {place.note}")
+        # The numbered buttons open a card, but the link right here is one tap
+        # fewer — a driver mid-route does not want a detour through a menu.
+        lines.append(f"   {place_map_link(place)}")
         lines.append("")
 
     return "\n".join(lines).rstrip()

@@ -58,6 +58,19 @@ def test_place_card_links_to_the_place_not_the_null_island() -> None:
     assert "query=55.75,37.61" in text
 
 
+def test_every_result_carries_its_own_map_link() -> None:
+    # The numbered buttons open a card, but the link in the text is one tap
+    # fewer — a driver mid-route does not want a detour through a menu.
+    text = format_place_results(
+        [
+            make_place(place_id=1, name="Газпром"),
+            make_place(place_id=2, name="Кафе"),
+        ]
+    )
+
+    assert text.count("https://www.google.com/maps/search/?api=1&query=") == 2
+
+
 def test_results_are_numbered_and_show_categories() -> None:
     text = format_place_results(
         [

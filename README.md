@@ -32,9 +32,9 @@ added it.
   somebody asks for permission to add places; the startup notice goes to super
   admins only — restarts are routine and the ordinary rung cannot act on them
 
-Seven categories: restaurant, cafe, fuel, hotel, parking, car service, and `other` as a
-fallback — a place filed under a category it does not belong to is worse than one filed
-under none.
+Eight categories: restaurant, cafe, fuel, hotel, parking, car service, mosque, and
+`other` as a fallback — a place filed under a category it does not belong to is worse
+than one filed under none.
 
 ## Architecture
 

@@ -116,6 +116,17 @@ def test_the_fallback_category_is_offered_last() -> None:
     assert _callback_data(keyboard)[-1] == f"pick:{PlaceCategory.OTHER.value}"
 
 
+def test_a_mosque_has_a_category_of_its_own() -> None:
+    keyboard = build_category_choice_keyboard("pick")
+
+    data = [row[0].callback_data for row in keyboard.inline_keyboard]
+    assert "pick:mosque" in data
+
+
+def test_the_mosque_category_is_labelled_in_uzbek() -> None:
+    assert category_label(PlaceCategory.MOSQUE) == "🕌 Masjid"
+
+
 def test_category_buttons_show_their_counts() -> None:
     keyboard = build_category_choice_keyboard(
         "find:category", counts={PlaceCategory.FUEL: 3}
