@@ -45,6 +45,7 @@ from app.presentation.telegram.keyboards.admin import (
 )
 from app.presentation.telegram.keyboards.menu import ADMIN_BUTTON
 from app.presentation.telegram.keyboards.places import build_category_choice_keyboard
+from app.presentation.telegram.notifications import announce_add_verdict
 from app.presentation.telegram.states import AdminBroadcast
 
 router = Router(name="admin")
@@ -406,9 +407,39 @@ async def _decide_add_access(
     except TelegramAPIError as error:
         report_service_error(error, f"add access verdict to {user_id}")
 
+    await _echo_verdict(callback_query, bot, admin_ids, super_admin_ids, user_id, allow)
+
     confirmation = ACCESS_GRANTED_MESSAGE if allow else ACCESS_DENIED_MESSAGE
     await message.answer(f"{confirmation} (ID: {user_id}).")
     await callback_query.answer()
+
+
+async def _echo_verdict(
+    callback_query: CallbackQuery,
+    bot: Bot,
+    admin_ids: tuple[int, ...],
+    super_admin_ids: tuple[int, ...],
+    user_id: int,
+    allow: bool,
+) -> None:
+    """Tell the other admins who settled the request — not the decider, who
+    just watched themselves do it."""
+    decider = callback_query.from_user
+    if decider is None:
+        return
+
+    role = "super admin" if is_admin(callback_query, super_admin_ids) else "admin"
+    others = tuple(admin_id for admin_id in admin_ids if admin_id != decider.id)
+    await announce_add_verdict(
+        bot,
+        others,
+        full_name=decider.full_name or "",
+        username=decider.username,
+        decider_id=decider.id,
+        role=role,
+        user_id=user_id,
+        allow=allow,
+    )
 
 
 @router.callback_query(F.data.startswith("admin:revoke_add:"))

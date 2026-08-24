@@ -63,6 +63,8 @@ ADMIN_IDS = (ADMIN_ID,)
 class FakeUser:
     def __init__(self, user_id: int) -> None:
         self.id = user_id
+        self.full_name = "Ali"
+        self.username = None
 
 
 class FakeMessage:
@@ -998,3 +1000,51 @@ async def test_a_stranger_cannot_browse_locations(places, users) -> None:
     )
 
     assert callback.alerts == [NOT_ADMIN_MESSAGE]
+
+
+# --- the verdict echo -------------------------------------------------------
+
+
+async def test_a_verdict_is_echoed_to_the_other_admins() -> None:
+    # Every admin held the same request buttons; without the echo the others
+    # would answer a request that is already settled.
+    access = InMemoryAddAccessRepository()
+    access.set_status(7, AddAccessStatus.PENDING)
+    bot = FakeBot()
+    callback = FakeCallbackQuery("admin:allow_add:7", user_id=ORDINARY_ADMIN_ID)
+
+    await handle_allow_add(
+        callback, BOTH_RUNGS, ADMIN_IDS, DecideAddAccessUseCase(access), bot
+    )
+
+    echoed = [(chat_id, text) for chat_id, text in bot.sent if chat_id == ADMIN_ID]
+    assert len(echoed) == 1
+    assert "(admin)" in echoed[0][1]
+    assert "7" in echoed[0][1]
+
+
+async def test_the_decider_is_not_echoed_to_themselves() -> None:
+    access = InMemoryAddAccessRepository()
+    bot = FakeBot()
+    callback = FakeCallbackQuery("admin:allow_add:7", user_id=ORDINARY_ADMIN_ID)
+
+    await handle_allow_add(
+        callback, BOTH_RUNGS, ADMIN_IDS, DecideAddAccessUseCase(access), bot
+    )
+
+    assert all(chat_id != ORDINARY_ADMIN_ID for chat_id, _ in bot.sent)
+
+
+async def test_a_super_admins_verdict_carries_their_role() -> None:
+    access = InMemoryAddAccessRepository()
+    bot = FakeBot()
+    callback = FakeCallbackQuery("admin:deny_add:7", user_id=ADMIN_ID)
+
+    await handle_deny_add(
+        callback, BOTH_RUNGS, ADMIN_IDS, DecideAddAccessUseCase(access), bot
+    )
+
+    echoed = [(chat_id, text) for chat_id, text in bot.sent if chat_id == ORDINARY_ADMIN_ID]
+    assert len(echoed) == 1
+    assert "(super admin)" in echoed[0][1]
+    assert "rad etdi" in echoed[0][1]

@@ -52,6 +52,32 @@ async def announce_add_request(
     )
 
 
+async def announce_add_verdict(
+    bot: Bot,
+    admin_ids: tuple[int, ...],
+    full_name: str,
+    username: str | None,
+    decider_id: int,
+    role: str,
+    user_id: int,
+    allow: bool,
+) -> None:
+    """Echo one admin's verdict to the rest, named and with their rung.
+
+    Every admin held the same request buttons; without the echo the others
+    would answer a request that is already settled.
+    """
+    decider = _label(full_name, username, decider_id)
+    verdict = (
+        f"✅ ID: {user_id} foydalanuvchini tasdiqladi"
+        if allow
+        else f"⛔ ID: {user_id} foydalanuvchining so'rovini rad etdi"
+    )
+    await _tell_admins(
+        bot, admin_ids, f"ℹ️ {decider} ({role}) {verdict}.", context="add verdict echo"
+    )
+
+
 def _label(full_name: str, username: str | None, user_id: int) -> str:
     # Telegram accepts accounts whose visible name is blank. The id is the one
     # label that always exists, so the notice falls back to it.

@@ -3,6 +3,7 @@ from aiogram.exceptions import TelegramBadRequest
 from app.presentation.telegram.notifications import (
     STARTUP_MESSAGE,
     announce_add_request,
+    announce_add_verdict,
     announce_new_user,
     announce_startup,
 )
@@ -92,3 +93,45 @@ async def test_an_add_request_reaches_every_admin_with_the_decision_buttons() ->
         button.callback_data for row in bot.markups[0].inline_keyboard for button in row
     ]
     assert buttons == ["admin:allow_add:42", "admin:deny_add:42"]
+
+
+async def test_a_verdict_is_echoed_with_the_deciders_name_and_role() -> None:
+    bot = FakeBot()
+
+    await announce_add_verdict(
+        bot,
+        (1, 2),
+        full_name="Ali",
+        username="ali",
+        decider_id=50,
+        role="admin",
+        user_id=42,
+        allow=True,
+    )
+
+    assert [chat_id for chat_id, _ in bot.sent] == [1, 2]
+    text = bot.sent[0][1]
+    assert "Ali" in text
+    assert "(admin)" in text
+    assert "42" in text
+    assert "tasdiqladi" in text
+
+
+async def test_a_refusal_is_echoed_too() -> None:
+    bot = FakeBot()
+
+    await announce_add_verdict(
+        bot,
+        (1,),
+        full_name="Vali",
+        username=None,
+        decider_id=51,
+        role="super admin",
+        user_id=42,
+        allow=False,
+    )
+
+    text = bot.sent[0][1]
+    assert "Vali" in text
+    assert "(super admin)" in text
+    assert "rad etdi" in text
