@@ -26,6 +26,8 @@ from app.presentation.telegram.handlers.my_places import (
 class FakeUser:
     def __init__(self, user_id: int) -> None:
         self.id = user_id
+        self.full_name = "Ali"
+        self.username = None
 
 
 class FakeMessage:
@@ -401,3 +403,59 @@ async def test_picking_a_border_updates_the_place() -> None:
     await handle_set_category(callback, update_place=UpdatePlaceUseCase(repository))
 
     assert repository.get(place.id).category == PlaceCategory.BORDER_KZ
+
+
+class FakeBot:
+    def __init__(self) -> None:
+        self.sent: list[tuple[int, str]] = []
+
+    async def send_message(self, chat_id: int, text: str, **_: object) -> None:
+        self.sent.append((chat_id, text))
+
+
+async def test_an_owners_delete_is_announced_to_the_supers() -> None:
+    # Deleting your own place is a right, but a spree of it is how the shared
+    # database emptied once; the supers hear about each one immediately.
+    repository, place = seeded()
+    bot = FakeBot()
+    callback = FakeCallbackQuery(f"my_place:confirm_delete:{place.id}", user_id=42)
+
+    await handle_confirm_delete(
+        callback,
+        delete_place=DeletePlaceUseCase(repository, InMemoryDeletionLog()),
+        super_admin_ids=(1, 2),
+        bot=bot,
+    )
+
+    assert [chat_id for chat_id, _ in bot.sent] == [1, 2]
+    assert place.name in bot.sent[0][1]
+
+
+async def test_a_refused_delete_is_not_announced() -> None:
+    repository, place = seeded()
+    bot = FakeBot()
+    callback = FakeCallbackQuery(f"my_place:confirm_delete:{place.id}", user_id=7)
+
+    await handle_confirm_delete(
+        callback,
+        delete_place=DeletePlaceUseCase(repository, InMemoryDeletionLog()),
+        super_admin_ids=(1,),
+        bot=bot,
+    )
+
+    assert bot.sent == []
+
+
+async def test_a_super_deleting_their_own_place_hears_no_echo() -> None:
+    repository, place = seeded()  # place belongs to user 42
+    bot = FakeBot()
+    callback = FakeCallbackQuery(f"my_place:confirm_delete:{place.id}", user_id=42)
+
+    await handle_confirm_delete(
+        callback,
+        delete_place=DeletePlaceUseCase(repository, InMemoryDeletionLog()),
+        super_admin_ids=(42,),
+        bot=bot,
+    )
+
+    assert bot.sent == []

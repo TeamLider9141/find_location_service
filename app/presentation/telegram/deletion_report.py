@@ -28,7 +28,8 @@ _PAGE = """<!doctype html>
   h1 {{ font-size: 1.3rem; }}
   p.meta {{ color: #6e6e73; }}
   table {{ border-collapse: collapse; width: 100%; background: #fff; }}
-  th, td {{ border: 1px solid #d1d1d6; padding: 0.5rem 0.7rem; text-align: left; vertical-align: top; }}
+  th, td {{ border: 1px solid #d1d1d6; padding: 0.5rem 0.7rem;
+           text-align: left; vertical-align: top; }}
   th {{ background: #ececf0; position: sticky; top: 0; }}
   tr:nth-child(even) td {{ background: #fafafa; }}
   a {{ color: #0a58ca; }}

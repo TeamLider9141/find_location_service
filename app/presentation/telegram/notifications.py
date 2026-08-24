@@ -78,6 +78,32 @@ async def announce_add_verdict(
     )
 
 
+OWNER_DELETION_PREFIX = "🗑 Egasi o'z joyini o'chirdi"
+
+
+async def announce_owner_deletion(
+    bot: Bot,
+    admin_ids: tuple[int, ...],
+    full_name: str,
+    username: str | None,
+    user_id: int,
+    place_name: str,
+) -> None:
+    """Tell the super admins a driver removed their own place.
+
+    Deleting your own contribution is a right, but a spree of it is how the
+    shared database emptied once. The notice turns an hour-late discovery
+    into an instant one.
+    """
+    label = _label(full_name, username, user_id)
+    await _tell_admins(
+        bot,
+        admin_ids,
+        f"{OWNER_DELETION_PREFIX}: {label}\n📍 {place_name}",
+        context="owner deletion notice",
+    )
+
+
 def _label(full_name: str, username: str | None, user_id: int) -> str:
     # Telegram accepts accounts whose visible name is blank. The id is the one
     # label that always exists, so the notice falls back to it.

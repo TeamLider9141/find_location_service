@@ -1,6 +1,6 @@
 import sqlite3
 
-from aiogram import F, Router
+from aiogram import Bot, F, Router
 from aiogram.types import CallbackQuery, Message
 
 from app.application.use_cases.places import (
@@ -17,6 +17,7 @@ from app.presentation.telegram.errors import (
 )
 from app.presentation.telegram.formatters import format_place_card
 from app.presentation.telegram.keyboards.menu import MY_PLACES_BUTTON
+from app.presentation.telegram.notifications import announce_owner_deletion
 from app.presentation.telegram.keyboards.places import (
     BORDER_GROUP_VALUE,
     CHOOSE_BORDER_MESSAGE,
@@ -166,6 +167,8 @@ async def handle_delete_prompt(callback_query: CallbackQuery) -> None:
 async def handle_confirm_delete(
     callback_query: CallbackQuery,
     delete_place: DeletePlaceUseCase,
+    super_admin_ids: tuple[int, ...] = (),
+    bot: Bot | None = None,
 ) -> None:
     place_id = _parse_id(callback_query.data, "my_place:confirm_delete:")
     user_id = user_id_of(callback_query)
@@ -181,18 +184,36 @@ async def handle_confirm_delete(
         return
 
     try:
-        deleted = delete_place.execute(place_id=place_id, user_id=user_id)
+        deleted_place = delete_place.execute(place_id=place_id, user_id=user_id)
     except sqlite3.Error as error:
         report_service_error(error, "delete place")
         await message.answer(DATABASE_ERROR_MESSAGE)
         await callback_query.answer()
         return
 
-    if not deleted:
+    if deleted_place is None:
         await callback_query.answer(NOT_YOURS_MESSAGE)
         return
 
     await message.answer(DELETED_MESSAGE)
+
+    # Deleting your own place is a right, but a spree of it is how the shared
+    # database emptied once — the supers hear about each one immediately. A
+    # super deleting their own place is spared the echo of themselves.
+    if bot is not None:
+        sender = callback_query.from_user
+        recipients = tuple(
+            admin_id for admin_id in super_admin_ids if admin_id != user_id
+        )
+        await announce_owner_deletion(
+            bot,
+            recipients,
+            full_name=(sender.full_name or "") if sender else "",
+            username=sender.username if sender else None,
+            user_id=user_id,
+            place_name=deleted_place.name,
+        )
+
     await callback_query.answer()
 
 

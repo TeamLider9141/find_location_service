@@ -154,10 +154,17 @@ class DeletePlaceUseCase:
         self._repository = repository
         self._deletions = deletions
 
-    def execute(self, place_id: int, user_id: int) -> bool:
+    def execute(self, place_id: int, user_id: int) -> Place | None:
+        """Delete the driver's own place; returns what was deleted, or None.
+
+        The snapshot goes back to the caller too, so the notice to the super
+        admins can name what just disappeared.
+        """
         # Snapshot before the delete: afterwards there is nothing left to log.
         place = self._repository.get(place_id)
         deleted = self._repository.delete(place_id, user_id)
-        if deleted and place is not None:
-            self._deletions.record(place, deleted_by=user_id, source="owner")
-        return deleted
+        if not deleted or place is None:
+            return None
+
+        self._deletions.record(place, deleted_by=user_id, source="owner")
+        return place

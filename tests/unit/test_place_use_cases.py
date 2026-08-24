@@ -402,7 +402,8 @@ def test_delete_place_by_the_author_succeeds() -> None:
     stored = _seed(repository)
 
     deleter = DeletePlaceUseCase(repository, InMemoryDeletionLog())
-    assert deleter.execute(stored.id, user_id=42) is True
+    # The snapshot comes back so the caller can name what disappeared.
+    assert deleter.execute(stored.id, user_id=42).name == stored.name
     assert repository.get(stored.id) is None
 
 
@@ -411,5 +412,5 @@ def test_delete_place_by_another_user_fails() -> None:
     stored = _seed(repository)
 
     deleter = DeletePlaceUseCase(repository, InMemoryDeletionLog())
-    assert deleter.execute(stored.id, user_id=7) is False
+    assert deleter.execute(stored.id, user_id=7) is None
     assert repository.get(stored.id) is not None

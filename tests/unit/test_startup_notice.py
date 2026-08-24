@@ -5,6 +5,7 @@ from app.presentation.telegram.notifications import (
     announce_add_request,
     announce_add_verdict,
     announce_new_user,
+    announce_owner_deletion,
     announce_startup,
 )
 
@@ -135,3 +136,16 @@ async def test_a_refusal_is_echoed_too() -> None:
     assert "Vali" in text
     assert "(super admin)" in text
     assert "rad etdi" in text
+
+
+async def test_an_owner_deletion_notice_names_the_driver_and_the_place() -> None:
+    bot = FakeBot()
+
+    await announce_owner_deletion(
+        bot, (1,), full_name="Ali", username="ali", user_id=42, place_name="Газпром"
+    )
+
+    text = bot.sent[0][1]
+    assert "Ali" in text
+    assert "Газпром" in text
+    assert "o'chirdi" in text
