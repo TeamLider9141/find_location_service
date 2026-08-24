@@ -5,9 +5,9 @@
 #     sh scripts/env_cheklovlar.sh
 #     sudo systemctl restart find-location
 #
-# Ikki marta ishlatsa ham dublikat qolmaydi: avval eski bo'limni va qolgan
-# THROTTLE_ satrlarini olib tashlaydi, keyin yangisini yozadi. Token,
-# ADMIN_IDS va DATABASE_PATH ga tegmaydi.
+# Ikki marta ishlatsa ham xavfsiz. .env da allaqachon turgan THROTTLE_
+# qiymatlari SAQLANADI — faqat izohlar yangilanadi. Token, ADMIN_IDS va
+# DATABASE_PATH ga tegilmaydi.
 set -e
 cd "$(dirname "$0")/.."
 
@@ -18,6 +18,10 @@ test -f .env || {
 
 cp .env .env.bak
 echo "Zaxira: .env.bak"
+
+# Mavjud qiymatlarni yozib olamiz, keyin yangi blokka qaytaramiz. Aks holda
+# serverda qo'lda sozlangan raqamlar har ishga tushirishda default'ga qaytardi.
+saqlangan=$(grep '^THROTTLE_[A-Z_]*=' .env || true)
 
 sed '/^# ==/,$d' .env | grep -v '^THROTTLE_' > .env.tmp
 mv .env.tmp .env
@@ -115,7 +119,18 @@ THROTTLE_IDLE_SECONDS=300
 # 60 = daqiqada bir marta, odatiy.
 # Oshirsang: kamroq CPU, ko'proq xotira. Kamaytirsang: teskarisi.
 # Bu sozlama cheklov qattiqligiga TA'SIR QILMAYDI — faqat xotira tozalash.
+#
+# DIQQAT: "tozalash" bu yerda faqat xotiradagi token savatlarini bildiradi.
+# Haydovchilarning qo'shgan joylari, ismlari, radius/natija sozlamalari
+# data/find_location.sqlite3 faylida turadi va bu sozlama ularga TEGMAYDI.
+# Bu yerda o'chadigan yagona narsa — "nechta token qoldi" hisoblagichi.
 THROTTLE_PRUNE_INTERVAL_SECONDS=60
 ENV
+
+# Har saqlangan qiymatni blokdagi o'rniga qo'yamiz.
+echo "$saqlangan" | grep . | while IFS='=' read -r kalit qiymat; do
+    sed -i "s|^${kalit}=.*|${kalit}=${qiymat}|" .env
+    echo "Saqlandi: ${kalit}=${qiymat}"
+done
 
 echo "Yozildi. Endi: sudo systemctl restart find-location"
