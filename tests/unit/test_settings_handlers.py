@@ -57,6 +57,6 @@ async def test_settings_update_changes_radius_and_result_limit() -> None:
     settings = store.get(user_id=42)
     assert settings.nearby_radius_meters == 45_000
     assert settings.result_limit == 14
-    assert "15 km" in str(callback.message.answers[0]["text"])
-    assert "9 ta" in str(callback.message.answers[0]["text"])
+    assert "45 km" in str(callback.message.answers[0]["text"])
+    assert "14 ta" in str(callback.message.answers[0]["text"])
     assert callback.alerts == [None]
