@@ -936,6 +936,7 @@ async def test_a_category_lists_places_by_their_authors(places, users) -> None:
         admin_ids=ADMIN_IDS,
         super_admin_ids=ADMIN_IDS,
         admin_places_by_category=AdminPlacesByCategoryUseCase(places, users),
+        count_places_by_category=CountPlacesByCategoryUseCase(places),
     )
 
     text = callback.texts[0]
@@ -954,6 +955,7 @@ async def test_the_ordinary_rung_is_not_shown_the_super_admins_places(places, us
         admin_ids=BOTH_RUNGS,
         super_admin_ids=(ADMIN_ID,),
         admin_places_by_category=AdminPlacesByCategoryUseCase(places, users),
+        count_places_by_category=CountPlacesByCategoryUseCase(places),
     )
 
     assert "Газпром" in callback.texts[0]
@@ -970,6 +972,7 @@ async def test_a_super_admin_is_shown_every_places_author(places, users) -> None
         admin_ids=BOTH_RUNGS,
         super_admin_ids=(ADMIN_ID,),
         admin_places_by_category=AdminPlacesByCategoryUseCase(places, users),
+        count_places_by_category=CountPlacesByCategoryUseCase(places),
     )
 
     assert "Superniki" in callback.texts[0]
@@ -984,6 +987,7 @@ async def test_a_garbled_category_is_refused(places, users) -> None:
         admin_ids=ADMIN_IDS,
         super_admin_ids=ADMIN_IDS,
         admin_places_by_category=AdminPlacesByCategoryUseCase(places, users),
+        count_places_by_category=CountPlacesByCategoryUseCase(places),
     )
 
     assert callback.alerts == [INVALID_SELECTION_MESSAGE]
@@ -1048,3 +1052,19 @@ async def test_a_super_admins_verdict_carries_their_role() -> None:
     assert len(echoed) == 1
     assert "(super admin)" in echoed[0][1]
     assert "rad etdi" in echoed[0][1]
+
+
+async def test_the_border_group_opens_in_the_location_browser(places, users) -> None:
+    callback = FakeCallbackQuery("admin:places_cat:borders")
+
+    await handle_admin_places_category(
+        callback,
+        admin_ids=ADMIN_IDS,
+        super_admin_ids=ADMIN_IDS,
+        admin_places_by_category=AdminPlacesByCategoryUseCase(places, users),
+        count_places_by_category=CountPlacesByCategoryUseCase(places),
+    )
+
+    keyboard = callback.message.answers[0]["reply_markup"]
+    data = [row[0].callback_data for row in keyboard.inline_keyboard]
+    assert data == ["admin:places_cat:border_kz", "admin:places_cat:border_ru"]

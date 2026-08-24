@@ -27,6 +27,9 @@ from app.presentation.telegram.formatters import (
 )
 from app.presentation.telegram.keyboards.menu import NEARBY_BUTTON, SEARCH_BUTTON
 from app.presentation.telegram.keyboards.places import (
+    BORDER_GROUP_VALUE,
+    CHOOSE_BORDER_MESSAGE,
+    build_border_choice_keyboard,
     build_category_choice_keyboard,
     build_place_results_keyboard,
 )
@@ -58,18 +61,24 @@ class UserSettingsStore(Protocol):
 async def handle_find_start(
     message: Message, count_places_by_category: CountPlacesByCategoryUseCase
 ) -> None:
-    try:
-        counts = count_places_by_category.execute()
-    except sqlite3.Error as error:
-        # The keyboard still works without the numbers; failing the whole
-        # search over a decoration would be backwards.
-        report_service_error(error, "category counts")
-        counts = None
-
     await message.answer(
         ASK_QUERY_MESSAGE,
-        reply_markup=build_category_choice_keyboard("find:category", counts),
+        reply_markup=build_category_choice_keyboard(
+            "find:category", _counts_or_none(count_places_by_category)
+        ),
     )
+
+
+def _counts_or_none(
+    count_places_by_category: CountPlacesByCategoryUseCase,
+) -> dict[PlaceCategory, int] | None:
+    """The keyboard still works without the numbers; failing the whole search
+    over a decoration would be backwards."""
+    try:
+        return count_places_by_category.execute()
+    except sqlite3.Error as error:
+        report_service_error(error, "category counts")
+        return None
 
 
 @router.callback_query(F.data.startswith("find:category:"))
@@ -77,16 +86,27 @@ async def handle_category_browse(
     callback_query: CallbackQuery,
     find_places: FindPlacesUseCase,
     user_settings: UserSettingsStore,
+    count_places_by_category: CountPlacesByCategoryUseCase,
 ) -> None:
+    message = answerable_message(callback_query)
+    if message is None:
+        await callback_query.answer(EXPIRED_MESSAGE)
+        return
+
+    if callback_query.data == f"find:category:{BORDER_GROUP_VALUE}":
+        await message.answer(
+            CHOOSE_BORDER_MESSAGE,
+            reply_markup=build_border_choice_keyboard(
+                "find:category", _counts_or_none(count_places_by_category)
+            ),
+        )
+        await callback_query.answer()
+        return
+
     category = _parse_category(callback_query.data, "find:category:")
     user_id = user_id_of(callback_query)
     if category is None or user_id is None:
         await callback_query.answer(INVALID_SELECTION_MESSAGE)
-        return
-
-    message = answerable_message(callback_query)
-    if message is None:
-        await callback_query.answer(EXPIRED_MESSAGE)
         return
 
     limit = user_settings.get(user_id).result_limit

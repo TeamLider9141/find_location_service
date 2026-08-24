@@ -18,6 +18,9 @@ from app.presentation.telegram.errors import (
 from app.presentation.telegram.formatters import format_place_card
 from app.presentation.telegram.keyboards.menu import MY_PLACES_BUTTON
 from app.presentation.telegram.keyboards.places import (
+    BORDER_GROUP_VALUE,
+    CHOOSE_BORDER_MESSAGE,
+    build_border_choice_keyboard,
     build_my_place_actions_keyboard,
     build_place_delete_confirmation_keyboard,
     build_update_category_keyboard,
@@ -89,15 +92,28 @@ async def handle_set_category(
     callback_query: CallbackQuery,
     update_place: UpdatePlaceUseCase,
 ) -> None:
+    message = answerable_message(callback_query)
+    if message is None:
+        await callback_query.answer(EXPIRED_MESSAGE)
+        return
+
+    # The borders hide behind one button; opening them keeps the place id in
+    # the callbacks, so the eventual choice still knows its target.
+    group_place_id = _parse_border_group(callback_query.data)
+    if group_place_id is not None:
+        await message.answer(
+            CHOOSE_BORDER_MESSAGE,
+            reply_markup=build_border_choice_keyboard(
+                f"my_place:set_category:{group_place_id}"
+            ),
+        )
+        await callback_query.answer()
+        return
+
     parsed = _parse_id_and_category(callback_query.data)
     user_id = user_id_of(callback_query)
     if parsed is None or user_id is None:
         await callback_query.answer(INVALID_SELECTION_MESSAGE)
-        return
-
-    message = answerable_message(callback_query)
-    if message is None:
-        await callback_query.answer(EXPIRED_MESSAGE)
         return
 
     place_id, category = parsed
@@ -210,3 +226,15 @@ def _parse_id_and_category(data: str | None) -> tuple[int, PlaceCategory] | None
         return int(raw_id), PlaceCategory(raw_category)
     except ValueError:
         return None
+
+
+def _parse_border_group(data: str | None) -> int | None:
+    """The place id out of a border-group tap, or None for anything else."""
+    prefix = "my_place:set_category:"
+    if data is None or not data.startswith(prefix):
+        return None
+
+    raw_id, _, tail = data.removeprefix(prefix).partition(":")
+    if tail == BORDER_GROUP_VALUE and raw_id.isdigit():
+        return int(raw_id)
+    return None

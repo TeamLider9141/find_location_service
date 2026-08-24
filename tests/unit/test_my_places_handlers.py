@@ -9,6 +9,7 @@ from app.application.use_cases.places import (
 from app.domain.value_objects.category import PlaceCategory
 from app.domain.value_objects.coordinates import Coordinates
 from app.infrastructure.repositories.in_memory_places import InMemoryPlaceRepository
+from app.presentation.telegram.keyboards.places import BORDER_CATEGORIES, BORDER_GROUP_VALUE
 from app.presentation.telegram.handlers.my_places import (
     INVALID_SELECTION_MESSAGE,
     NOT_YOURS_MESSAGE,
@@ -146,10 +147,14 @@ async def test_category_prompt_offers_every_category_for_that_place() -> None:
 
     keyboard = callback.message.answers[0]["reply_markup"]
     callback_data = [row[0].callback_data for row in keyboard.inline_keyboard]
-    assert callback_data == [
-        f"my_place:set_category:{place.id}:{category.value}"
-        for category in PlaceCategory
-    ]
+    expected = []
+    for category in PlaceCategory:
+        if category in BORDER_CATEGORIES:
+            continue
+        if category is PlaceCategory.OTHER:
+            expected.append(f"my_place:set_category:{place.id}:{BORDER_GROUP_VALUE}")
+        expected.append(f"my_place:set_category:{place.id}:{category.value}")
+    assert callback_data == expected
 
 
 async def test_category_prompt_rejects_a_callback_that_is_not_an_id() -> None:
@@ -364,3 +369,34 @@ async def test_cancel_delete_on_an_expired_message_still_closes_the_spinner() ->
     await handle_cancel_delete(callback)
 
     assert callback.alerts == [None]
+
+
+async def test_the_border_group_keeps_the_place_id() -> None:
+    # The sub keyboard's callbacks still carry the place id, so the eventual
+    # choice knows its target.
+    repository, place = seeded()
+    callback = FakeCallbackQuery(
+        f"my_place:set_category:{place.id}:{BORDER_GROUP_VALUE}", user_id=42
+    )
+
+    await handle_set_category(callback, update_place=UpdatePlaceUseCase(repository))
+
+    keyboard = callback.message.answers[0]["reply_markup"]
+    data = [row[0].callback_data for row in keyboard.inline_keyboard]
+    assert data == [
+        f"my_place:set_category:{place.id}:border_kz",
+        f"my_place:set_category:{place.id}:border_ru",
+    ]
+    # Nothing was written: the group tap is navigation, not a choice.
+    assert repository.get(place.id).category == PlaceCategory.FUEL
+
+
+async def test_picking_a_border_updates_the_place() -> None:
+    repository, place = seeded()
+    callback = FakeCallbackQuery(
+        f"my_place:set_category:{place.id}:border_kz", user_id=42
+    )
+
+    await handle_set_category(callback, update_place=UpdatePlaceUseCase(repository))
+
+    assert repository.get(place.id).category == PlaceCategory.BORDER_KZ

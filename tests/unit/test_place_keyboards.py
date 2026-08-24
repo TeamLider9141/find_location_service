@@ -3,6 +3,9 @@ from aiogram.types import InlineKeyboardMarkup
 from app.domain.value_objects.category import PlaceCategory
 from app.presentation.telegram.keyboards.categories import category_label
 from app.presentation.telegram.keyboards.places import (
+    BORDER_CATEGORIES,
+    BORDER_GROUP_VALUE,
+    build_border_choice_keyboard,
     build_category_choice_keyboard,
     build_duplicate_confirmation_keyboard,
     build_my_place_actions_keyboard,
@@ -20,12 +23,41 @@ def _texts(keyboard: InlineKeyboardMarkup) -> list[str]:
     return [button.text for row in keyboard.inline_keyboard for button in row]
 
 
+def _folded_expectation(prefix: str) -> list[str]:
+    """Every category is reachable: the borders through their group button,
+    the rest directly, the fallback last."""
+    expected = []
+    for category in PlaceCategory:
+        if category in BORDER_CATEGORIES:
+            continue
+        if category is PlaceCategory.OTHER:
+            expected.append(f"{prefix}:{BORDER_GROUP_VALUE}")
+        expected.append(f"{prefix}:{category.value}")
+    return expected
+
+
 def test_category_choice_offers_every_category() -> None:
     keyboard = build_category_choice_keyboard("pick")
 
+    assert _callback_data(keyboard) == _folded_expectation("pick")
+
+
+def test_the_border_group_opens_into_its_members() -> None:
+    keyboard = build_border_choice_keyboard("pick")
+
     assert _callback_data(keyboard) == [
-        f"pick:{category.value}" for category in PlaceCategory
+        f"pick:{category.value}" for category in BORDER_CATEGORIES
     ]
+
+
+def test_the_border_group_counts_both_its_members() -> None:
+    keyboard = build_category_choice_keyboard(
+        "pick",
+        counts={PlaceCategory.BORDER_KZ: 2, PlaceCategory.BORDER_RU: 1},
+    )
+
+    group = next(row[0].text for row in keyboard.inline_keyboard if "Chegara" in row[0].text)
+    assert "(3 ta)" in group
 
 
 def test_category_choice_labels_every_button() -> None:
@@ -33,8 +65,10 @@ def test_category_choice_labels_every_button() -> None:
     # category from silently vanishing from the UI, so the labels have to come
     # from the same table the rest of the bot uses.
     keyboard = build_category_choice_keyboard("pick")
+    borders = build_border_choice_keyboard("pick")
 
-    assert _texts(keyboard) == [category_label(category) for category in PlaceCategory]
+    shown = set(_texts(keyboard) + _texts(borders))
+    assert {category_label(category) for category in PlaceCategory} <= shown
 
 
 def test_place_results_carry_database_ids_not_indexes() -> None:
@@ -72,9 +106,7 @@ def test_my_place_actions_target_one_place() -> None:
 def test_update_category_keyboard_targets_one_place() -> None:
     keyboard = build_update_category_keyboard(7)
 
-    assert _callback_data(keyboard) == [
-        f"my_place:set_category:7:{category.value}" for category in PlaceCategory
-    ]
+    assert _callback_data(keyboard) == _folded_expectation("my_place:set_category:7")
 
 
 def test_delete_confirmation_offers_both_answers() -> None:

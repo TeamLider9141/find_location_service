@@ -27,6 +27,9 @@ from app.presentation.telegram.keyboards.menu import (
     build_main_menu_keyboard,
 )
 from app.presentation.telegram.keyboards.places import (
+    BORDER_GROUP_VALUE,
+    CHOOSE_BORDER_MESSAGE,
+    build_border_choice_keyboard,
     build_category_choice_keyboard,
     build_duplicate_confirmation_keyboard,
 )
@@ -144,14 +147,24 @@ async def handle_name(message: Message, state: FSMContext) -> None:
 
 @router.callback_query(AddPlace.category, F.data.startswith("add_place:category:"))
 async def handle_category(callback_query: CallbackQuery, state: FSMContext) -> None:
-    category = _parse_category(callback_query.data)
-    if category is None:
-        await callback_query.answer(INVALID_CATEGORY_MESSAGE)
-        return
-
     message = answerable_message(callback_query)
     if message is None:
         await callback_query.answer(EXPIRED_MESSAGE)
+        return
+
+    # The borders hide behind one button; tapping it opens them and the state
+    # stays right here, waiting for the real choice.
+    if callback_query.data == f"add_place:category:{BORDER_GROUP_VALUE}":
+        await message.answer(
+            CHOOSE_BORDER_MESSAGE,
+            reply_markup=build_border_choice_keyboard("add_place:category"),
+        )
+        await callback_query.answer()
+        return
+
+    category = _parse_category(callback_query.data)
+    if category is None:
+        await callback_query.answer(INVALID_CATEGORY_MESSAGE)
         return
 
     await state.update_data(category=category.value)

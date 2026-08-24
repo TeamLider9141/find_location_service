@@ -44,7 +44,12 @@ from app.presentation.telegram.keyboards.admin import (
     build_users_page_keyboard,
 )
 from app.presentation.telegram.keyboards.menu import ADMIN_BUTTON
-from app.presentation.telegram.keyboards.places import build_category_choice_keyboard
+from app.presentation.telegram.keyboards.places import (
+    BORDER_GROUP_VALUE,
+    CHOOSE_BORDER_MESSAGE,
+    build_border_choice_keyboard,
+    build_category_choice_keyboard,
+)
 from app.presentation.telegram.notifications import announce_add_verdict
 from app.presentation.telegram.states import AdminBroadcast
 
@@ -231,10 +236,26 @@ async def handle_admin_places_category(
     admin_ids: tuple[int, ...],
     super_admin_ids: tuple[int, ...],
     admin_places_by_category: AdminPlacesByCategoryUseCase,
+    count_places_by_category: CountPlacesByCategoryUseCase,
 ) -> None:
     """One category's places, grouped by the driver who added them."""
     message = await _open(callback_query, admin_ids)
     if message is None:
+        return
+
+    if callback_query.data == f"admin:places_cat:{BORDER_GROUP_VALUE}":
+        try:
+            counts = count_places_by_category.execute(
+                exclude_author_ids=_hidden_ids(callback_query, super_admin_ids)
+            )
+        except sqlite3.Error as error:
+            report_service_error(error, "admin category counts")
+            counts = None
+        await message.answer(
+            CHOOSE_BORDER_MESSAGE,
+            reply_markup=build_border_choice_keyboard("admin:places_cat", counts),
+        )
+        await callback_query.answer()
         return
 
     category = _parse_category(callback_query.data, prefix="admin:places_cat:")

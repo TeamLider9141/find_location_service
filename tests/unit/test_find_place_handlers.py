@@ -240,6 +240,7 @@ async def test_category_browse_honours_the_result_limit() -> None:
         unlimited,
         find_places=FindPlacesUseCase(repository),
         user_settings=InMemoryUserSettingsStore(),
+        count_places_by_category=CountPlacesByCategoryUseCase(InMemoryPlaceRepository()),
     )
     keyboard = unlimited.message.answers[0]["reply_markup"]
     assert len(keyboard.inline_keyboard) == 2
@@ -249,6 +250,7 @@ async def test_category_browse_honours_the_result_limit() -> None:
         limited,
         find_places=FindPlacesUseCase(repository),
         user_settings=FixedSettingsStore(UserSettings(result_limit=1)),
+        count_places_by_category=CountPlacesByCategoryUseCase(InMemoryPlaceRepository()),
     )
     keyboard = limited.message.answers[0]["reply_markup"]
     assert len(keyboard.inline_keyboard) == 1
@@ -304,6 +306,7 @@ async def test_category_browse_lists_that_category() -> None:
         callback,
         find_places=FindPlacesUseCase(repository),
         user_settings=InMemoryUserSettingsStore(),
+        count_places_by_category=CountPlacesByCategoryUseCase(InMemoryPlaceRepository()),
     )
 
     text = str(callback.message.answers[0]["text"])
@@ -319,6 +322,7 @@ async def test_category_browse_rejects_an_unknown_category() -> None:
         callback,
         find_places=FindPlacesUseCase(repository),
         user_settings=InMemoryUserSettingsStore(),
+        count_places_by_category=CountPlacesByCategoryUseCase(InMemoryPlaceRepository()),
     )
 
     assert callback.alerts[0] is not None
@@ -333,6 +337,7 @@ async def test_category_browse_survives_a_message_too_old_to_answer() -> None:
         callback,
         find_places=FindPlacesUseCase(repository),
         user_settings=InMemoryUserSettingsStore(),
+        count_places_by_category=CountPlacesByCategoryUseCase(InMemoryPlaceRepository()),
     )
 
     assert callback.alerts[0] is not None
@@ -535,3 +540,18 @@ async def test_a_logging_failure_still_answers_the_driver() -> None:
     )
 
     assert message.answers[0]["reply_markup"].inline_keyboard
+
+
+async def test_the_border_group_opens_instead_of_searching() -> None:
+    callback = FakeCallbackQuery("find:category:borders")
+
+    await handle_category_browse(
+        callback,
+        find_places=FindPlacesUseCase(InMemoryPlaceRepository()),
+        user_settings=InMemoryUserSettingsStore(),
+        count_places_by_category=CountPlacesByCategoryUseCase(InMemoryPlaceRepository()),
+    )
+
+    keyboard = callback.message.answers[0]["reply_markup"]
+    data = [row[0].callback_data for row in keyboard.inline_keyboard]
+    assert data == ["find:category:border_kz", "find:category:border_ru"]

@@ -21,6 +21,7 @@ from app.presentation.telegram.handlers.add_place import (
     handle_skip_note,
 )
 from app.presentation.telegram.handlers.start import handle_cancel as handle_global_cancel
+from app.presentation.telegram.keyboards.places import BORDER_CATEGORIES, BORDER_GROUP_VALUE
 from app.presentation.telegram.states import AddPlace
 
 
@@ -186,9 +187,14 @@ async def test_name_step_offers_every_category() -> None:
 
     keyboard = message.answers[0]["reply_markup"]
     callback_data = [row[0].callback_data for row in keyboard.inline_keyboard]
-    assert callback_data == [
-        f"add_place:category:{category.value}" for category in PlaceCategory
-    ]
+    expected = []
+    for category in PlaceCategory:
+        if category in BORDER_CATEGORIES:
+            continue
+        if category is PlaceCategory.OTHER:
+            expected.append(f"add_place:category:{BORDER_GROUP_VALUE}")
+        expected.append(f"add_place:category:{category.value}")
+    assert callback_data == expected
 
 
 async def test_name_step_rejects_a_blank_name_and_stays_put() -> None:
@@ -674,3 +680,29 @@ async def test_a_place_with_no_author_is_not_saved() -> None:
 
     assert repository.search() == []
     assert await state.get_state() is None
+
+
+async def test_the_border_group_opens_its_two_members() -> None:
+    # Tapping the group is not a choice yet: the state stays on the category
+    # step, waiting for the real one.
+    state = make_state()
+    await state.set_state(AddPlace.category)
+    callback = FakeCallbackQuery(f"add_place:category:{BORDER_GROUP_VALUE}")
+
+    await handle_category(callback, state)
+
+    assert await state.get_state() == AddPlace.category.state
+    keyboard = callback.message.answers[0]["reply_markup"]
+    data = [row[0].callback_data for row in keyboard.inline_keyboard]
+    assert data == ["add_place:category:border_kz", "add_place:category:border_ru"]
+
+
+async def test_picking_a_border_moves_on_to_the_location() -> None:
+    state = make_state()
+    await state.set_state(AddPlace.category)
+    callback = FakeCallbackQuery("add_place:category:border_kz")
+
+    await handle_category(callback, state)
+
+    assert (await state.get_data())["category"] == "border_kz"
+    assert await state.get_state() == AddPlace.location.state
