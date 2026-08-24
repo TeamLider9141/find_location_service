@@ -46,7 +46,9 @@ def build_users_page_keyboard(page: UsersPage) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
-def build_user_detail_keyboard(places: list[Place], page: int = 0) -> InlineKeyboardMarkup:
+def build_user_detail_keyboard(
+    places: list[Place], user_id: int, page: int = 0
+) -> InlineKeyboardMarkup:
     rows = [
         [
             InlineKeyboardButton(
@@ -56,6 +58,16 @@ def build_user_detail_keyboard(places: list[Place], page: int = 0) -> InlineKeyb
         ]
         for place in places
     ]
+    # Offered for every user, approved or not: revoking someone who never asked
+    # is a harmless no-op, and the admin should not have to check first.
+    rows.append(
+        [
+            InlineKeyboardButton(
+                text="🚫 Joy qo'shish ruxsatini olib tashlash",
+                callback_data=f"admin:revoke_add:{user_id}",
+            )
+        ]
+    )
     rows.append(
         [InlineKeyboardButton(text="⬅ Ro'yxatga", callback_data=f"admin:users:{max(page, 0)}")]
     )

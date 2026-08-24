@@ -35,10 +35,11 @@ async def run_bot() -> int:
         throttle=create_throttle_middleware(settings),
         add_access=create_add_access_repository(settings),
         admin_ids=settings.admin_ids,
+        super_admin_ids=settings.super_admin_ids,
     )
     try:
-        await configure_commands(bot, settings.admin_ids)
-        await announce_startup(bot, settings.admin_ids)
+        await configure_commands(bot, settings.all_admin_ids)
+        await announce_startup(bot, settings.all_admin_ids)
         await dispatcher.start_polling(bot)
     finally:
         await bot.session.close()

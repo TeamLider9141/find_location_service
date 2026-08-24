@@ -19,7 +19,11 @@ from app.application.use_cases.places import (
     NearbyPlacesUseCase,
     UpdatePlaceUseCase,
 )
-from app.application.use_cases.access import DecideAddAccessUseCase, RequestAddAccessUseCase
+from app.application.use_cases.access import (
+    DecideAddAccessUseCase,
+    RequestAddAccessUseCase,
+    RevokeAddAccessUseCase,
+)
 from app.config.settings import Settings
 from app.domain.interfaces.add_access import AddAccessRepository
 from app.domain.interfaces.places import PlaceRepository
@@ -42,7 +46,11 @@ def create_dispatcher(
     throttle: ThrottleMiddleware,
     add_access: AddAccessRepository,
     admin_ids: tuple[int, ...] = (),
+    super_admin_ids: tuple[int, ...] = (),
 ) -> Dispatcher:
+    # Supers are admins too: one variable answers "may they open the panel",
+    # the other answers "may they delete and broadcast".
+    all_admins = tuple(dict.fromkeys((*admin_ids, *super_admin_ids)))
     dispatcher = Dispatcher(
         add_place=AddPlaceUseCase(repository),
         find_places=FindPlacesUseCase(repository),
@@ -61,7 +69,9 @@ def create_dispatcher(
         broadcast_recipients=ListBroadcastRecipientsUseCase(users),
         request_add_access=RequestAddAccessUseCase(add_access),
         decide_add_access=DecideAddAccessUseCase(add_access),
-        admin_ids=admin_ids,
+        revoke_add_access=RevokeAddAccessUseCase(add_access),
+        admin_ids=all_admins,
+        super_admin_ids=super_admin_ids,
     )
 
     # Throttling goes on first, so a flood is dropped before it reaches the
@@ -70,7 +80,7 @@ def create_dispatcher(
 
     # Outer middleware, on both update types: a driver who only taps buttons
     # still has to show up in the admin panel.
-    tracking = UserTrackingMiddleware(RecordUserVisitUseCase(users), admin_ids=admin_ids)
+    tracking = UserTrackingMiddleware(RecordUserVisitUseCase(users), admin_ids=all_admins)
     dispatcher.message.outer_middleware(tracking)
     dispatcher.callback_query.outer_middleware(tracking)
 

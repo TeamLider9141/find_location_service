@@ -91,16 +91,26 @@ def test_the_last_page_has_no_forward_arrow() -> None:
 
 
 def test_a_user_detail_offers_a_delete_button_per_place() -> None:
-    data = callbacks(build_user_detail_keyboard([make_place(3), make_place(4, "Лукойл")]))
+    data = callbacks(
+        build_user_detail_keyboard([make_place(3), make_place(4, "Лукойл")], user_id=7)
+    )
 
     assert "admin:place_delete:3" in data
     assert "admin:place_delete:4" in data
 
 
 def test_a_user_detail_returns_to_the_list() -> None:
-    data = callbacks(build_user_detail_keyboard([], page=2))
+    data = callbacks(build_user_detail_keyboard([], user_id=7, page=2))
 
     assert "admin:users:2" in data
+
+
+def test_a_user_detail_offers_to_revoke_add_access() -> None:
+    # Present even for a user who never asked: revoking them is a harmless
+    # no-op, and the admin should not have to check first.
+    data = callbacks(build_user_detail_keyboard([], user_id=7))
+
+    assert "admin:revoke_add:7" in data
 
 
 def test_broadcast_confirmation_offers_send_and_cancel() -> None:

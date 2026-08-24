@@ -18,13 +18,15 @@ added it.
 - Manage the places you contributed — change category, delete
 - Per-user settings for search radius and result count, kept across restarts
 - Admin panel — statistics, user list, per-user detail with a map link for every
-  place they added, top searches, moderation delete, broadcast. Reached with
-  `/admin` or the 🛠 button, which only appears in the menu of an id listed in
-  `ADMIN_IDS`
+  place they added, top searches, moderation delete, broadcast, add-permission
+  approve/revoke. Reached with `/admin` or the 🛠 button
+- Two admin rungs: `ADMIN_IDS` may look at everything and manage add permissions;
+  `SUPER_ADMIN_IDS` may additionally delete places and broadcast. The panel looks
+  the same on both rungs — a super-only button refuses the tap with an alert
 - Per-driver rate limit: bursts of five messages pass, anything faster is dropped
   with one warning
-- Every id in `ADMIN_IDS` is messaged when the bot starts, so a restart is not silent
-- Every id in `ADMIN_IDS` is also messaged the first time a new user opens the bot
+- Both admin rungs are messaged when the bot starts, when a new user first opens
+  the bot, and when somebody asks for permission to add places
 
 Seven categories: restaurant, cafe, fuel, hotel, parking, car service, and `other` as a
 fallback — a place filed under a category it does not belong to is worse than one filed
@@ -38,8 +40,8 @@ under none.
 - `app/presentation/telegram` — handlers, keyboards, formatters, FSM states
 
 Reads are global; writes are author-scoped. Anyone can look up any place, but only the
-driver who added it can change or delete it. Admins listed in `ADMIN_IDS` are the exception:
-they can delete any place, and they are the only ones who can open `/admin`.
+driver who added it can change or delete it. Super admins are the exception: they can
+delete any place. Both admin rungs can open `/admin` and manage add permissions.
 
 ## Setup
 
@@ -55,7 +57,8 @@ Settings are read from `.env`; environment variables override it when both are p
 | --- | --- |
 | `TELEGRAM_BOT_TOKEN` | Bot token from @BotFather. Required. |
 | `DATABASE_PATH` | SQLite file. Defaults to `data/find_location.sqlite3`. |
-| `ADMIN_IDS` | Comma separated Telegram user ids allowed into `/admin`. Empty means nobody. |
+| `ADMIN_IDS` | Comma separated ids of ordinary admins: view the panel, approve and revoke add permissions. |
+| `SUPER_ADMIN_IDS` | Comma separated ids of super admins: everything above, plus delete and broadcast. |
 | `THROTTLE_BURST` | Messages a driver may send back to back. Defaults to 5, minimum 1. |
 | `THROTTLE_REFILL_PER_SECOND` | Messages a second a driver earns back. Defaults to 1.0, must be above 0. |
 | `THROTTLE_WARNING_SECONDS` | Seconds between two throttle replies. Defaults to 10; 0 answers every dropped message. |

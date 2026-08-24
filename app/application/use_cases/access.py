@@ -40,3 +40,18 @@ class DecideAddAccessUseCase:
     def execute(self, user_id: int, allow: bool) -> None:
         status = AddAccessStatus.APPROVED if allow else AddAccessStatus.REJECTED
         self._access.set_status(user_id, status)
+
+
+class RevokeAddAccessUseCase:
+    """The admin takes a driver's permission back.
+
+    Cleared rather than rejected: the driver returns to the state of never
+    having asked, so their next attempt files a fresh request instead of
+    running into a standing refusal.
+    """
+
+    def __init__(self, access: AddAccessRepository) -> None:
+        self._access = access
+
+    def execute(self, user_id: int) -> None:
+        self._access.clear(user_id)

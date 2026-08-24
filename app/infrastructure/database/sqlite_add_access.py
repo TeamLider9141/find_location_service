@@ -39,6 +39,11 @@ class SQLiteAddAccessRepository:
             )
             connection.commit()
 
+    def clear(self, user_id: int) -> None:
+        with closing(self._connect()) as connection:
+            connection.execute("DELETE FROM add_access WHERE user_id = ?", (user_id,))
+            connection.commit()
+
     def _initialize(self) -> None:
         with closing(self._connect()) as connection:
             connection.execute(

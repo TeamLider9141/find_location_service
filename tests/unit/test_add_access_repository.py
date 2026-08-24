@@ -37,6 +37,20 @@ def test_one_drivers_status_says_nothing_about_another(access) -> None:
     assert access.status(7) is None
 
 
+def test_clearing_returns_the_driver_to_never_asked(access) -> None:
+    access.set_status(42, AddAccessStatus.APPROVED)
+
+    access.clear(42)
+
+    assert access.status(42) is None
+
+
+def test_clearing_a_driver_who_never_asked_is_a_no_op(access) -> None:
+    access.clear(42)
+
+    assert access.status(42) is None
+
+
 def test_a_granted_permission_survives_a_restart(tmp_path) -> None:
     # The point of the SQLite implementation: an approval must not evaporate
     # on the next deploy.

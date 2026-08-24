@@ -7,7 +7,7 @@ from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
-from app.application.use_cases.access import DecideAddAccessUseCase
+from app.application.use_cases.access import DecideAddAccessUseCase, RevokeAddAccessUseCase
 from app.application.use_cases.admin import (
     DeletePlaceAsAdminUseCase,
     GetAdminOverviewUseCase,
@@ -60,6 +60,9 @@ ACCESS_GRANTED_USER_MESSAGE = (
     "✅ Admin joy qo'shishga ruxsat berdi. ➕ Joy qo'shish tugmasini bosing."
 )
 ACCESS_DENIED_USER_MESSAGE = "⛔ Admin hozircha joy qo'shishga ruxsat bermadi."
+ACCESS_REVOKED_MESSAGE = "🚫 Ruxsat olib tashlandi"
+ACCESS_REVOKED_USER_MESSAGE = "🚫 Admin joy qo'shish ruxsatingizni bekor qildi."
+SUPER_ADMIN_ONLY_MESSAGE = "Bu faqat super admin uchun. Siz buni qila olmaysiz."
 TOP_SEARCHES_LIMIT = 10
 # ~20 messages a second, under Telegram's ~30/s ceiling for bots.
 SEND_INTERVAL_SECONDS = 0.05
@@ -168,7 +171,7 @@ async def handle_admin_user_detail(
 
     await message.answer(
         format_user_detail(detail),
-        reply_markup=build_user_detail_keyboard(detail.places),
+        reply_markup=build_user_detail_keyboard(detail.places, user_id=detail.user.id),
     )
     await callback_query.answer()
 
@@ -199,8 +202,9 @@ async def handle_admin_searches(
 async def handle_place_delete_prompt(
     callback_query: CallbackQuery,
     admin_ids: tuple[int, ...],
+    super_admin_ids: tuple[int, ...],
 ) -> None:
-    message = await _open(callback_query, admin_ids)
+    message = await _open_super(callback_query, admin_ids, super_admin_ids)
     if message is None:
         return
 
@@ -220,9 +224,10 @@ async def handle_place_delete_prompt(
 async def handle_place_delete_confirm(
     callback_query: CallbackQuery,
     admin_ids: tuple[int, ...],
+    super_admin_ids: tuple[int, ...],
     delete_place_as_admin: DeletePlaceAsAdminUseCase,
 ) -> None:
-    message = await _open(callback_query, admin_ids)
+    message = await _open_super(callback_query, admin_ids, super_admin_ids)
     if message is None:
         return
 
@@ -318,13 +323,54 @@ async def _decide_add_access(
     await callback_query.answer()
 
 
+@router.callback_query(F.data.startswith("admin:revoke_add:"))
+async def handle_revoke_add(
+    callback_query: CallbackQuery,
+    admin_ids: tuple[int, ...],
+    revoke_add_access: RevokeAddAccessUseCase,
+    bot: Bot,
+) -> None:
+    """Take a driver's add permission back. Open to both admin rungs.
+
+    The driver returns to the never-asked state, so their next attempt files
+    a fresh request rather than hitting a standing refusal.
+    """
+    message = await _open(callback_query, admin_ids)
+    if message is None:
+        return
+
+    user_id = _parse_int(callback_query.data, prefix="admin:revoke_add:")
+    if user_id is None:
+        await callback_query.answer(INVALID_SELECTION_MESSAGE)
+        return
+
+    try:
+        revoke_add_access.execute(user_id)
+    except sqlite3.Error as error:
+        report_service_error(error, "add access revoke")
+        await message.answer(DATABASE_ERROR_MESSAGE)
+        await callback_query.answer()
+        return
+
+    # Told rather than left to find out: a driver whose next add silently asks
+    # for permission again would file it as a bug.
+    try:
+        await bot.send_message(user_id, ACCESS_REVOKED_USER_MESSAGE)
+    except TelegramAPIError as error:
+        report_service_error(error, f"add access revoke notice to {user_id}")
+
+    await message.answer(f"{ACCESS_REVOKED_MESSAGE} (ID: {user_id}).")
+    await callback_query.answer()
+
+
 @router.callback_query(F.data == "admin:broadcast")
 async def handle_broadcast_start(
     callback_query: CallbackQuery,
     state: FSMContext,
     admin_ids: tuple[int, ...],
+    super_admin_ids: tuple[int, ...],
 ) -> None:
-    message = await _open(callback_query, admin_ids)
+    message = await _open_super(callback_query, admin_ids, super_admin_ids)
     if message is None:
         return
 
@@ -366,9 +412,10 @@ async def handle_broadcast_send(
     state: FSMContext,
     bot: Bot,
     admin_ids: tuple[int, ...],
+    super_admin_ids: tuple[int, ...],
     broadcast_recipients: ListBroadcastRecipientsUseCase,
 ) -> None:
-    message = await _open(callback_query, admin_ids)
+    message = await _open_super(callback_query, admin_ids, super_admin_ids)
     if message is None:
         return
 
@@ -466,6 +513,27 @@ async def _open(callback_query: CallbackQuery, admin_ids: tuple[int, ...]) -> Me
     message = answerable_message(callback_query)
     if message is None:
         await callback_query.answer(EXPIRED_MESSAGE)
+        return None
+
+    return message
+
+
+async def _open_super(
+    callback_query: CallbackQuery,
+    admin_ids: tuple[int, ...],
+    super_admin_ids: tuple[int, ...],
+) -> Message | None:
+    """Like ``_open``, for the actions only a super admin may take.
+
+    An ordinary admin sees the same buttons — the panel looks identical on
+    purpose — so the refusal happens here, on the tap, as an alert.
+    """
+    message = await _open(callback_query, admin_ids)
+    if message is None:
+        return None
+
+    if not is_admin(callback_query, super_admin_ids):
+        await callback_query.answer(SUPER_ADMIN_ONLY_MESSAGE, show_alert=True)
         return None
 
     return message

@@ -8,7 +8,10 @@ from typing import Any, Callable, Mapping
 class Settings:
     telegram_bot_token: str | None = None
     database_path: str = "data/find_location.sqlite3"
+    # Two rungs. Admins see the panel, approve add requests and revoke them;
+    # super admins additionally delete places and broadcast.
     admin_ids: tuple[int, ...] = ()
+    super_admin_ids: tuple[int, ...] = ()
 
     # These repeat the defaults in the throttling middleware rather than import
     # them: config must not depend on the presentation layer. A test asserts the
@@ -36,6 +39,7 @@ class Settings:
             telegram_bot_token=values.get("TELEGRAM_BOT_TOKEN") or None,
             database_path=values.get("DATABASE_PATH", cls.database_path),
             admin_ids=_read_admin_ids(values.get("ADMIN_IDS", "")),
+            super_admin_ids=_read_admin_ids(values.get("SUPER_ADMIN_IDS", "")),
             throttle_burst=_read_number(
                 values.get("THROTTLE_BURST"), cls.throttle_burst, int, minimum=1
             ),
@@ -62,6 +66,14 @@ class Settings:
                 float,
             ),
         )
+
+    @property
+    def all_admin_ids(self) -> tuple[int, ...]:
+        """Everyone with a panel: the recipients of admin notices.
+
+        An id listed in both variables is one person, not two messages.
+        """
+        return tuple(dict.fromkeys((*self.admin_ids, *self.super_admin_ids)))
 
 
 def _read_number(

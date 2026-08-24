@@ -10,3 +10,6 @@ class InMemoryAddAccessRepository:
 
     def set_status(self, user_id: int, status: AddAccessStatus) -> None:
         self._statuses[user_id] = status
+
+    def clear(self, user_id: int) -> None:
+        self._statuses.pop(user_id, None)

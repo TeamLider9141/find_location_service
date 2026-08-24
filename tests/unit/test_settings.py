@@ -102,6 +102,21 @@ def test_a_non_numeric_admin_id_is_dropped() -> None:
     assert settings.admin_ids == (111,)
 
 
+def test_super_admin_ids_are_parsed_the_same_way() -> None:
+    settings = Settings.from_sources(env={"SUPER_ADMIN_IDS": " 111 , oops "}, dotenv_path=None)
+
+    assert settings.super_admin_ids == (111,)
+
+
+def test_all_admin_ids_joins_both_rungs_without_repeats() -> None:
+    # An id listed in both variables is one person, not two messages.
+    settings = Settings.from_sources(
+        env={"ADMIN_IDS": "111,222", "SUPER_ADMIN_IDS": "222,333"}, dotenv_path=None
+    )
+
+    assert settings.all_admin_ids == (111, 222, 333)
+
+
 def test_without_admin_ids_nobody_is_an_admin() -> None:
     settings = Settings.from_sources(env={}, dotenv_path=None)
 

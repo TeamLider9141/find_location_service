@@ -11,3 +11,6 @@ class AddAccessRepository(Protocol):
 
     def set_status(self, user_id: int, status: AddAccessStatus) -> None:
         """Record the latest word — the driver's request or the admin's answer."""
+
+    def clear(self, user_id: int) -> None:
+        """Forget this driver entirely, as if they never asked."""

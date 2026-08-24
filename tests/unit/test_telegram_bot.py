@@ -18,6 +18,7 @@ USERS = InMemoryUserRepository()
 SETTINGS = InMemoryUserSettingsStore()
 ACCESS = InMemoryAddAccessRepository()
 ADMIN_IDS = (99,)
+SUPER_ADMIN_IDS = (98,)
 
 
 @pytest.fixture(scope="module")
@@ -29,6 +30,7 @@ def dispatcher() -> Dispatcher:
         throttle=ThrottleMiddleware(),
         add_access=ACCESS,
         admin_ids=ADMIN_IDS,
+        super_admin_ids=SUPER_ADMIN_IDS,
     )
 
 
@@ -56,7 +58,9 @@ def test_dispatcher_injects_every_place_dependency(dispatcher: Dispatcher) -> No
         "broadcast_recipients",
         "request_add_access",
         "decide_add_access",
+        "revoke_add_access",
         "admin_ids",
+        "super_admin_ids",
     ):
         assert key in dispatcher.workflow_data
 
@@ -97,7 +101,10 @@ def test_dispatcher_keeps_state_for_the_add_place_wizard(
 def test_admin_ids_reach_the_handlers_that_guard_on_them(
     dispatcher: Dispatcher,
 ) -> None:
-    assert dispatcher.workflow_data["admin_ids"] == ADMIN_IDS
+    # Supers are admins too: the panel check reads one combined tuple, the
+    # super-only check reads its own.
+    assert dispatcher.workflow_data["admin_ids"] == ADMIN_IDS + SUPER_ADMIN_IDS
+    assert dispatcher.workflow_data["super_admin_ids"] == SUPER_ADMIN_IDS
 
 
 def test_every_visitor_is_recorded_before_a_handler_runs(

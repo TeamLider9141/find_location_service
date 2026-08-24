@@ -6,7 +6,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.storage.base import StorageKey
 from aiogram.fsm.storage.memory import MemoryStorage
 
-from app.application.use_cases.access import DecideAddAccessUseCase
+from app.application.use_cases.access import DecideAddAccessUseCase, RevokeAddAccessUseCase
 from app.application.use_cases.admin import (
     DeletePlaceAsAdminUseCase,
     GetAdminOverviewUseCase,
@@ -31,11 +31,13 @@ from app.presentation.telegram.handlers.admin import (
     DELETED_MESSAGE,
     INVALID_SELECTION_MESSAGE,
     NOT_ADMIN_MESSAGE,
+    SUPER_ADMIN_ONLY_MESSAGE,
     UNKNOWN_USER_MESSAGE,
     handle_admin_command,
     handle_admin_home,
     handle_allow_add,
     handle_deny_add,
+    handle_revoke_add,
     handle_admin_searches,
     handle_admin_stats,
     handle_admin_user_detail,
@@ -191,6 +193,7 @@ async def test_a_stranger_cannot_delete_a_place(places, users) -> None:
     await handle_place_delete_confirm(
         callback,
         admin_ids=ADMIN_IDS,
+        super_admin_ids=ADMIN_IDS,
         delete_place_as_admin=DeletePlaceAsAdminUseCase(places),
     )
 
@@ -309,7 +312,7 @@ async def test_delete_asks_before_removing(places, users) -> None:
     stored = seed_place(places)
     callback = FakeCallbackQuery(f"admin:place_delete:{stored.id}")
 
-    await handle_place_delete_prompt(callback, admin_ids=ADMIN_IDS)
+    await handle_place_delete_prompt(callback, admin_ids=ADMIN_IDS, super_admin_ids=ADMIN_IDS)
 
     assert places.get(stored.id) is not None
     assert callback.message.answers[0]["reply_markup"] is not None
@@ -322,6 +325,7 @@ async def test_confirming_removes_a_place_the_admin_never_added(places, users) -
     await handle_place_delete_confirm(
         callback,
         admin_ids=ADMIN_IDS,
+        super_admin_ids=ADMIN_IDS,
         delete_place_as_admin=DeletePlaceAsAdminUseCase(places),
     )
 
@@ -335,6 +339,7 @@ async def test_deleting_a_place_that_is_already_gone_is_reported(places, users) 
     await handle_place_delete_confirm(
         callback,
         admin_ids=ADMIN_IDS,
+        super_admin_ids=ADMIN_IDS,
         delete_place_as_admin=DeletePlaceAsAdminUseCase(places),
     )
 
@@ -357,7 +362,9 @@ async def test_broadcast_asks_for_the_text(places, users) -> None:
     state = make_state()
     callback = FakeCallbackQuery("admin:broadcast")
 
-    await handle_broadcast_start(callback, state=state, admin_ids=ADMIN_IDS)
+    await handle_broadcast_start(
+        callback, state=state, admin_ids=ADMIN_IDS, super_admin_ids=ADMIN_IDS
+    )
 
     assert await state.get_state() == AdminBroadcast.message.state
     assert ASK_BROADCAST_MESSAGE in callback.texts
@@ -393,6 +400,7 @@ async def test_sending_reaches_every_user(places, users) -> None:
         state=state,
         bot=bot,
         admin_ids=ADMIN_IDS,
+        super_admin_ids=ADMIN_IDS,
         broadcast_recipients=ListBroadcastRecipientsUseCase(users),
     )
 
@@ -414,6 +422,7 @@ async def test_a_blocked_user_does_not_stop_the_broadcast(places, users) -> None
         state=state,
         bot=bot,
         admin_ids=ADMIN_IDS,
+        super_admin_ids=ADMIN_IDS,
         broadcast_recipients=ListBroadcastRecipientsUseCase(users),
     )
 
@@ -432,6 +441,7 @@ async def test_sending_without_a_pending_text_is_refused(places, users) -> None:
         state=state,
         bot=bot,
         admin_ids=ADMIN_IDS,
+        super_admin_ids=ADMIN_IDS,
         broadcast_recipients=ListBroadcastRecipientsUseCase(users),
     )
 
@@ -451,6 +461,7 @@ async def test_the_pending_text_is_cleared_after_sending(places, users) -> None:
         state=state,
         bot=bot,
         admin_ids=ADMIN_IDS,
+        super_admin_ids=ADMIN_IDS,
         broadcast_recipients=ListBroadcastRecipientsUseCase(users),
     )
     await handle_broadcast_send(
@@ -458,6 +469,7 @@ async def test_the_pending_text_is_cleared_after_sending(places, users) -> None:
         state=state,
         bot=bot,
         admin_ids=ADMIN_IDS,
+        super_admin_ids=ADMIN_IDS,
         broadcast_recipients=ListBroadcastRecipientsUseCase(users),
     )
 
@@ -499,6 +511,7 @@ async def test_the_broadcast_paces_itself_between_sends(places, users, sleeps) -
         state=state,
         bot=bot,
         admin_ids=ADMIN_IDS,
+        super_admin_ids=ADMIN_IDS,
         broadcast_recipients=ListBroadcastRecipientsUseCase(users),
     )
 
@@ -522,6 +535,7 @@ async def test_flood_control_is_waited_out_rather_than_counted_as_failed(
         state=state,
         bot=bot,
         admin_ids=ADMIN_IDS,
+        super_admin_ids=ADMIN_IDS,
         broadcast_recipients=ListBroadcastRecipientsUseCase(users),
     )
 
@@ -545,6 +559,7 @@ async def test_a_second_flood_error_for_one_driver_gives_up(places, users, sleep
         state=state,
         bot=bot,
         admin_ids=ADMIN_IDS,
+        super_admin_ids=ADMIN_IDS,
         broadcast_recipients=ListBroadcastRecipientsUseCase(users),
     )
 
@@ -622,3 +637,123 @@ async def test_a_garbled_add_access_id_is_refused() -> None:
     await handle_allow_add(callback, ADMIN_IDS, DecideAddAccessUseCase(access), FakeBot())
 
     assert callback.alerts == [INVALID_SELECTION_MESSAGE]
+
+
+# --- the two admin rungs ----------------------------------------------------
+
+ORDINARY_ADMIN_ID = 50
+BOTH_RUNGS = (ORDINARY_ADMIN_ID, ADMIN_ID)
+
+
+async def test_an_ordinary_admin_cannot_open_the_delete_prompt(places) -> None:
+    # The panel looks identical on purpose; the refusal happens on the tap.
+    stored = seed_place(places)
+    callback = FakeCallbackQuery(f"admin:place_delete:{stored.id}", user_id=ORDINARY_ADMIN_ID)
+
+    await handle_place_delete_prompt(
+        callback, admin_ids=BOTH_RUNGS, super_admin_ids=ADMIN_IDS
+    )
+
+    assert callback.alerts == [SUPER_ADMIN_ONLY_MESSAGE]
+    assert callback.texts == []
+
+
+async def test_an_ordinary_admin_cannot_confirm_a_delete_either(places) -> None:
+    # The confirm callback is guessable, so the prompt guard alone is not enough.
+    stored = seed_place(places)
+    callback = FakeCallbackQuery(
+        f"admin:place_delete_confirm:{stored.id}", user_id=ORDINARY_ADMIN_ID
+    )
+
+    await handle_place_delete_confirm(
+        callback,
+        admin_ids=BOTH_RUNGS,
+        super_admin_ids=ADMIN_IDS,
+        delete_place_as_admin=DeletePlaceAsAdminUseCase(places),
+    )
+
+    assert places.get(stored.id) is not None
+    assert callback.alerts == [SUPER_ADMIN_ONLY_MESSAGE]
+
+
+async def test_an_ordinary_admin_cannot_start_a_broadcast() -> None:
+    state = make_state()
+    callback = FakeCallbackQuery("admin:broadcast", user_id=ORDINARY_ADMIN_ID)
+
+    await handle_broadcast_start(
+        callback, state=state, admin_ids=BOTH_RUNGS, super_admin_ids=ADMIN_IDS
+    )
+
+    assert callback.alerts == [SUPER_ADMIN_ONLY_MESSAGE]
+    assert await state.get_state() is None
+
+
+async def test_an_ordinary_admin_still_reads_statistics(places, users) -> None:
+    seed_place(places)
+    callback = FakeCallbackQuery("admin:stats", user_id=ORDINARY_ADMIN_ID)
+
+    await handle_admin_stats(
+        callback, admin_ids=BOTH_RUNGS, admin_overview=GetAdminOverviewUseCase(places, users)
+    )
+
+    assert "Joylar: 1 ta" in callback.texts[0]
+
+
+async def test_an_ordinary_admin_can_hand_out_add_access() -> None:
+    access = InMemoryAddAccessRepository()
+    access.set_status(7, AddAccessStatus.PENDING)
+    callback = FakeCallbackQuery("admin:allow_add:7", user_id=ORDINARY_ADMIN_ID)
+
+    await handle_allow_add(callback, BOTH_RUNGS, DecideAddAccessUseCase(access), FakeBot())
+
+    assert access.status(7) == AddAccessStatus.APPROVED
+
+
+# --- revoking add access ----------------------------------------------------
+
+
+async def test_revoking_returns_the_driver_to_never_asked() -> None:
+    access = InMemoryAddAccessRepository()
+    access.set_status(7, AddAccessStatus.APPROVED)
+    bot = FakeBot()
+    callback = FakeCallbackQuery("admin:revoke_add:7")
+
+    await handle_revoke_add(callback, ADMIN_IDS, RevokeAddAccessUseCase(access), bot)
+
+    assert access.status(7) is None
+    assert bot.sent[0][0] == 7
+    assert callback.alerts == [None]
+
+
+async def test_an_ordinary_admin_can_revoke_too() -> None:
+    access = InMemoryAddAccessRepository()
+    access.set_status(7, AddAccessStatus.APPROVED)
+    callback = FakeCallbackQuery("admin:revoke_add:7", user_id=ORDINARY_ADMIN_ID)
+
+    await handle_revoke_add(callback, BOTH_RUNGS, RevokeAddAccessUseCase(access), FakeBot())
+
+    assert access.status(7) is None
+
+
+async def test_a_stranger_cannot_revoke() -> None:
+    access = InMemoryAddAccessRepository()
+    access.set_status(7, AddAccessStatus.APPROVED)
+    callback = FakeCallbackQuery("admin:revoke_add:7", user_id=STRANGER_ID)
+
+    await handle_revoke_add(callback, ADMIN_IDS, RevokeAddAccessUseCase(access), FakeBot())
+
+    assert access.status(7) == AddAccessStatus.APPROVED
+    assert callback.alerts == [NOT_ADMIN_MESSAGE]
+
+
+async def test_a_blocked_driver_does_not_undo_the_revoke() -> None:
+    access = InMemoryAddAccessRepository()
+    access.set_status(7, AddAccessStatus.APPROVED)
+    callback = FakeCallbackQuery("admin:revoke_add:7")
+
+    await handle_revoke_add(
+        callback, ADMIN_IDS, RevokeAddAccessUseCase(access), FakeBot(blocked={7})
+    )
+
+    assert access.status(7) is None
+    assert callback.alerts == [None]
