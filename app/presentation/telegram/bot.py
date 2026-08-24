@@ -36,6 +36,7 @@ def create_dispatcher(
     repository: PlaceRepository,
     users: UserRepository,
     user_settings: UserSettingsStore,
+    throttle: ThrottleMiddleware,
     admin_ids: tuple[int, ...] = (),
 ) -> Dispatcher:
     dispatcher = Dispatcher(
@@ -59,7 +60,7 @@ def create_dispatcher(
 
     # Throttling goes on first, so a flood is dropped before it reaches the
     # database at all — including the tracking write below it.
-    dispatcher.message.outer_middleware(ThrottleMiddleware())
+    dispatcher.message.outer_middleware(throttle)
 
     # Outer middleware, on both update types: a driver who only taps buttons
     # still has to show up in the admin panel.
@@ -85,6 +86,14 @@ def create_bot(settings: Settings) -> Bot:
 
 def create_place_repository(settings: Settings) -> PlaceRepository:
     return SQLitePlaceRepository(settings.database_path)
+
+
+def create_throttle_middleware(settings: Settings) -> ThrottleMiddleware:
+    return ThrottleMiddleware(
+        burst=settings.throttle_burst,
+        refill_per_second=settings.throttle_refill_per_second,
+        warning_seconds=settings.throttle_warning_seconds,
+    )
 
 
 def create_user_settings_store(settings: Settings) -> UserSettingsStore:

@@ -1,6 +1,11 @@
 from pathlib import Path
 
 from app.config.settings import Settings, get_settings
+from app.presentation.telegram.middlewares.throttling import (
+    BURST_SIZE,
+    REFILL_PER_SECOND,
+    WARNING_INTERVAL_SECONDS,
+)
 
 
 def test_settings_read_the_token_and_database_path_from_env() -> None:
@@ -99,3 +104,67 @@ def test_without_admin_ids_nobody_is_an_admin() -> None:
     settings = Settings.from_sources(env={}, dotenv_path=None)
 
     assert settings.admin_ids == ()
+
+
+def test_the_throttle_defaults_match_the_middleware() -> None:
+    # The middleware constants are the documented behaviour. Config that
+    # silently disagreed with them would make the docs wrong, not the config.
+    settings = Settings.from_sources(env={}, dotenv_path=None)
+
+    assert settings.throttle_burst == BURST_SIZE
+    assert settings.throttle_refill_per_second == REFILL_PER_SECOND
+    assert settings.throttle_warning_seconds == WARNING_INTERVAL_SECONDS
+
+
+def test_the_throttle_is_tuned_from_the_environment() -> None:
+    settings = Settings.from_sources(
+        env={
+            "THROTTLE_BURST": "10",
+            "THROTTLE_REFILL_PER_SECOND": "2.5",
+            "THROTTLE_WARNING_SECONDS": "30",
+        },
+        dotenv_path=None,
+    )
+
+    assert settings.throttle_burst == 10
+    assert settings.throttle_refill_per_second == 2.5
+    assert settings.throttle_warning_seconds == 30.0
+
+
+def test_a_burst_of_zero_is_refused() -> None:
+    # Zero would drop every message from everyone, including the admin who
+    # would have to fix it. A misconfiguration must not be a way to lock the
+    # bot shut.
+    settings = Settings.from_sources(env={"THROTTLE_BURST": "0"}, dotenv_path=None)
+
+    assert settings.throttle_burst == BURST_SIZE
+
+
+def test_a_refill_of_zero_is_refused() -> None:
+    # Nothing ever refills, so every driver is throttled forever once they hit
+    # the burst.
+    settings = Settings.from_sources(env={"THROTTLE_REFILL_PER_SECOND": "0"}, dotenv_path=None)
+
+    assert settings.throttle_refill_per_second == REFILL_PER_SECOND
+
+
+def test_unreadable_throttle_values_fall_back_to_the_defaults() -> None:
+    settings = Settings.from_sources(
+        env={
+            "THROTTLE_BURST": "many",
+            "THROTTLE_REFILL_PER_SECOND": "fast",
+            "THROTTLE_WARNING_SECONDS": "-5",
+        },
+        dotenv_path=None,
+    )
+
+    assert settings.throttle_burst == BURST_SIZE
+    assert settings.throttle_refill_per_second == REFILL_PER_SECOND
+    assert settings.throttle_warning_seconds == WARNING_INTERVAL_SECONDS
+
+
+def test_warning_every_time_is_allowed() -> None:
+    # Zero is a choice, not a typo: it means answer every dropped message.
+    settings = Settings.from_sources(env={"THROTTLE_WARNING_SECONDS": "0"}, dotenv_path=None)
+
+    assert settings.throttle_warning_seconds == 0.0

@@ -38,7 +38,16 @@ class ThrottleMiddleware(BaseMiddleware):
     thumb, and a refused tap would leave the driver's spinner unexplained.
     """
 
-    def __init__(self, clock: Callable[[], float] = monotonic) -> None:
+    def __init__(
+        self,
+        burst: int = BURST_SIZE,
+        refill_per_second: float = REFILL_PER_SECOND,
+        warning_seconds: float = WARNING_INTERVAL_SECONDS,
+        clock: Callable[[], float] = monotonic,
+    ) -> None:
+        self._burst = float(burst)
+        self._refill_per_second = refill_per_second
+        self._warning_seconds = warning_seconds
         self._clock = clock
         self._buckets: dict[int, _Bucket] = {}
         self._last_prune = clock()
@@ -70,17 +79,17 @@ class ThrottleMiddleware(BaseMiddleware):
     def _refilled(self, user_id: int, now: float) -> _Bucket:
         bucket = self._buckets.get(user_id)
         if bucket is None:
-            bucket = _Bucket(tokens=BURST_SIZE, last_seen=now)
+            bucket = _Bucket(tokens=self._burst, last_seen=now)
             self._buckets[user_id] = bucket
             return bucket
 
-        earned = (now - bucket.last_seen) * REFILL_PER_SECOND
-        bucket.tokens = min(float(BURST_SIZE), bucket.tokens + earned)
+        earned = (now - bucket.last_seen) * self._refill_per_second
+        bucket.tokens = min(self._burst, bucket.tokens + earned)
         bucket.last_seen = now
         return bucket
 
     async def _warn(self, event: TelegramObject, bucket: _Bucket, now: float) -> None:
-        if now - bucket.last_warned < WARNING_INTERVAL_SECONDS:
+        if bucket.last_warned and now - bucket.last_warned < self._warning_seconds:
             return
 
         bucket.last_warned = now

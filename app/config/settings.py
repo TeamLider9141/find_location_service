@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from os import environ
 from pathlib import Path
-from typing import Mapping
+from typing import Any, Callable, Mapping
 
 
 @dataclass(frozen=True)
@@ -9,6 +9,13 @@ class Settings:
     telegram_bot_token: str | None = None
     database_path: str = "data/find_location.sqlite3"
     admin_ids: tuple[int, ...] = ()
+
+    # These repeat the defaults in the throttling middleware rather than import
+    # them: config must not depend on the presentation layer. A test asserts the
+    # two copies agree.
+    throttle_burst: int = 5
+    throttle_refill_per_second: float = 1.0
+    throttle_warning_seconds: float = 10.0
 
     @classmethod
     def from_env(cls, env: Mapping[str, str] = environ) -> "Settings":
@@ -27,7 +34,47 @@ class Settings:
             telegram_bot_token=values.get("TELEGRAM_BOT_TOKEN") or None,
             database_path=values.get("DATABASE_PATH", cls.database_path),
             admin_ids=_read_admin_ids(values.get("ADMIN_IDS", "")),
+            throttle_burst=_read_number(
+                values.get("THROTTLE_BURST"), cls.throttle_burst, int, minimum=1
+            ),
+            throttle_refill_per_second=_read_number(
+                values.get("THROTTLE_REFILL_PER_SECOND"),
+                cls.throttle_refill_per_second,
+                float,
+                minimum=0,
+                inclusive=False,
+            ),
+            throttle_warning_seconds=_read_number(
+                values.get("THROTTLE_WARNING_SECONDS"), cls.throttle_warning_seconds, float
+            ),
         )
+
+
+def _read_number(
+    value: str | None,
+    default: Any,
+    parse: Callable[[str], Any],
+    minimum: float = 0,
+    inclusive: bool = True,
+) -> Any:
+    """Read one numeric setting, falling back to the default on anything odd.
+
+    A throttle tuned to nonsense would silence every driver, including the admin
+    who has to undo it, so an unreadable or out-of-range value is dropped rather
+    than obeyed.
+    """
+    if value is None:
+        return default
+
+    try:
+        parsed = parse(value.strip())
+    except ValueError:
+        return default
+
+    if parsed < minimum or (not inclusive and parsed == minimum):
+        return default
+
+    return parsed
 
 
 def _read_admin_ids(value: str) -> tuple[int, ...]:

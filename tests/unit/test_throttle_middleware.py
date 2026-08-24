@@ -155,3 +155,40 @@ async def test_idle_senders_are_forgotten() -> None:
     await send(throttle, handler, user_id=999)
 
     assert throttle.tracked_senders() == 1
+
+
+async def test_the_first_flood_is_answered_even_early_in_the_process() -> None:
+    # monotonic() starts near zero on a freshly booted machine. Treating "never
+    # warned" as a timestamp would swallow the warning for the first flood.
+    clock = Clock()
+    clock.now = 3.0
+    throttle, handler = middleware(clock), Handler()
+    for _ in range(BURST_SIZE):
+        await send(throttle, handler)
+
+    dropped = await send(throttle, handler)
+
+    assert dropped.answers == [THROTTLED_MESSAGE]
+
+
+async def test_the_burst_and_refill_are_configurable() -> None:
+    clock = Clock()
+    throttle = ThrottleMiddleware(burst=2, refill_per_second=0.5, clock=clock)
+    handler = Handler()
+
+    for _ in range(3):
+        await send(throttle, handler)
+    clock.advance(2.0)
+    await send(throttle, handler)
+
+    assert handler.calls == 3
+
+
+async def test_a_zero_warning_interval_answers_every_dropped_message() -> None:
+    throttle = ThrottleMiddleware(burst=1, warning_seconds=0, clock=Clock())
+    handler = Handler()
+    await send(throttle, handler)
+
+    answered = [(await send(throttle, handler)).answers for _ in range(3)]
+
+    assert answered == [[THROTTLED_MESSAGE]] * 3

@@ -6,6 +6,7 @@ from app.config.settings import Settings
 from app.infrastructure.repositories.in_memory_places import InMemoryPlaceRepository
 from app.infrastructure.repositories.in_memory_users import InMemoryUserRepository
 from app.presentation.telegram.bot import create_bot, create_dispatcher
+from app.presentation.telegram.middlewares.throttling import ThrottleMiddleware
 from app.presentation.telegram.selection_store import InMemoryUserSettingsStore
 
 # The handler routers are module-level singletons, and aiogram refuses to attach
@@ -23,6 +24,7 @@ def dispatcher() -> Dispatcher:
         REPOSITORY,
         users=USERS,
         user_settings=SETTINGS,
+        throttle=ThrottleMiddleware(),
         admin_ids=ADMIN_IDS,
     )
 

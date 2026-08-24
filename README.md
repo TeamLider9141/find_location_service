@@ -51,6 +51,12 @@ Settings are read from `.env`; environment variables override it when both are p
 | `TELEGRAM_BOT_TOKEN` | Bot token from @BotFather. Required. |
 | `DATABASE_PATH` | SQLite file. Defaults to `data/find_location.sqlite3`. |
 | `ADMIN_IDS` | Comma separated Telegram user ids allowed into `/admin`. Empty means nobody. |
+| `THROTTLE_BURST` | Messages a driver may send back to back. Defaults to 5, minimum 1. |
+| `THROTTLE_REFILL_PER_SECOND` | Messages a second a driver earns back. Defaults to 1.0, must be above 0. |
+| `THROTTLE_WARNING_SECONDS` | Seconds between two throttle replies. Defaults to 10; 0 answers every dropped message. |
+
+A value that is unreadable or out of range is ignored and the default used instead — a
+mistyped throttle must not be a way to lock the bot shut.
 
 ## Run
 

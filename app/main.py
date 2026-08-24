@@ -7,6 +7,7 @@ from app.presentation.telegram.bot import (
     create_bot,
     create_dispatcher,
     create_place_repository,
+    create_throttle_middleware,
     create_user_repository,
     create_user_settings_store,
 )
@@ -30,6 +31,7 @@ async def run_bot() -> int:
         create_place_repository(settings),
         users=create_user_repository(settings),
         user_settings=create_user_settings_store(settings),
+        throttle=create_throttle_middleware(settings),
         admin_ids=settings.admin_ids,
     )
     try:
