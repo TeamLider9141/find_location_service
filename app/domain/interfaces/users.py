@@ -10,8 +10,11 @@ class UserRepository(Protocol):
     see who contributes and what people search for.
     """
 
-    def record_seen(self, user_id: int, full_name: str, username: str | None) -> None:
-        """Create or refresh a user. The first visit timestamp is never rewritten."""
+    def record_seen(self, user_id: int, full_name: str, username: str | None) -> bool:
+        """Create or refresh a user; True when this is their first ever visit.
+
+        The first visit timestamp is never rewritten.
+        """
 
     def get(self, user_id: int) -> BotUser | None:
         """Return one user, or None when the bot has never seen them."""

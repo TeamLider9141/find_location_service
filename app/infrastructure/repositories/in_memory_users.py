@@ -12,7 +12,7 @@ class InMemoryUserRepository:
         self._users: dict[int, BotUser] = {}
         self._searches: list[tuple[int, str]] = []
 
-    def record_seen(self, user_id: int, full_name: str, username: str | None) -> None:
+    def record_seen(self, user_id: int, full_name: str, username: str | None) -> bool:
         now = _now()
         existing = self._users.get(user_id)
         if existing is None:
@@ -23,7 +23,7 @@ class InMemoryUserRepository:
                 first_seen_at=now,
                 last_seen_at=now,
             )
-            return
+            return True
 
         self._users[user_id] = replace(
             existing,
@@ -31,6 +31,7 @@ class InMemoryUserRepository:
             username=username,
             last_seen_at=now,
         )
+        return False
 
     def get(self, user_id: int) -> BotUser | None:
         return self._users.get(user_id)

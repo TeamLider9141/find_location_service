@@ -16,12 +16,14 @@ added it.
 - Find places near your current location, sorted by distance
 - Manage the places you contributed — change category, delete
 - Per-user settings for search radius and result count, kept across restarts
-- Admin panel — statistics, user list, per-user detail, top searches, moderation
-  delete, broadcast. Reached with `/admin` or the 🛠 button, which only appears in
-  the menu of an id listed in `ADMIN_IDS`
+- Admin panel — statistics, user list, per-user detail with a map link for every
+  place they added, top searches, moderation delete, broadcast. Reached with
+  `/admin` or the 🛠 button, which only appears in the menu of an id listed in
+  `ADMIN_IDS`
 - Per-driver rate limit: bursts of five messages pass, anything faster is dropped
   with one warning
 - Every id in `ADMIN_IDS` is messaged when the bot starts, so a restart is not silent
+- Every id in `ADMIN_IDS` is also messaged the first time a new user opens the bot
 
 Seven categories: restaurant, cafe, fuel, hotel, parking, car service, and `other` as a
 fallback — a place filed under a category it does not belong to is worse than one filed

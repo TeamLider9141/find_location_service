@@ -13,11 +13,16 @@ class SQLiteUserRepository:
         self._database_path.parent.mkdir(parents=True, exist_ok=True)
         self._initialize()
 
-    def record_seen(self, user_id: int, full_name: str, username: str | None) -> None:
+    def record_seen(self, user_id: int, full_name: str, username: str | None) -> bool:
         # ON CONFLICT keeps first_seen_at as it was inserted: the row already
         # holds the answer to "when did this driver join", and an UPSERT that
         # rewrote it would make every returning user look new.
         with closing(self._connect()) as connection:
+            # The upsert changes one row either way, so it cannot say whether
+            # the user was new; only looking before writing can.
+            known = connection.execute(
+                "SELECT 1 FROM users WHERE id = ?", (user_id,)
+            ).fetchone()
             connection.execute(
                 """
                 INSERT INTO users (id, full_name, username)
@@ -30,6 +35,7 @@ class SQLiteUserRepository:
                 (user_id, full_name, username),
             )
             connection.commit()
+            return known is None
 
     def get(self, user_id: int) -> BotUser | None:
         with closing(self._connect()) as connection:

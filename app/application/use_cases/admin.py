@@ -150,11 +150,12 @@ class RecordUserVisitUseCase:
     def __init__(self, users: UserRepository) -> None:
         self._users = users
 
-    def execute(self, user_id: int, full_name: str, username: str | None) -> None:
+    def execute(self, user_id: int, full_name: str, username: str | None) -> bool:
+        """Record the visit; True when the bot has never seen this user before."""
         # Telegram accepts accounts whose visible name is blank. The id is the
         # one label that always exists, so the panel falls back to it.
         cleaned_name = full_name.strip() or str(user_id)
-        self._users.record_seen(user_id, full_name=cleaned_name, username=username)
+        return self._users.record_seen(user_id, full_name=cleaned_name, username=username)
 
 
 class DeletePlaceAsAdminUseCase:

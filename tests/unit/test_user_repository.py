@@ -52,6 +52,16 @@ def test_seeing_a_user_again_keeps_the_first_visit(repository) -> None:
     assert (user.full_name, user.username) == ("Ali Valiev", "alivaliev")
 
 
+def test_the_first_visit_reports_the_user_as_new(repository) -> None:
+    assert repository.record_seen(42, full_name="Ali", username=None) is True
+
+
+def test_a_returning_user_is_not_reported_as_new(repository) -> None:
+    repository.record_seen(42, full_name="Ali", username=None)
+
+    assert repository.record_seen(42, full_name="Ali", username="ali") is False
+
+
 def test_a_user_without_a_username_is_stored(repository) -> None:
     repository.record_seen(42, full_name="Ali", username=None)
 

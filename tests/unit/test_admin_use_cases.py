@@ -168,6 +168,16 @@ def test_recording_a_visit_stores_the_user() -> None:
     assert users.get(42) is not None
 
 
+def test_recording_a_visit_tells_whether_the_user_is_new() -> None:
+    # The middleware announces first visits to the admins, so "was this the
+    # first" has to survive the trip through the use case.
+    users = InMemoryUserRepository()
+    record = RecordUserVisitUseCase(users)
+
+    assert record.execute(42, full_name="Ali", username=None) is True
+    assert record.execute(42, full_name="Ali", username=None) is False
+
+
 def test_a_blank_name_falls_back_to_the_user_id() -> None:
     # Telegram allows an empty last name and, for some accounts, an empty first
     # name too. A user row with no label at all is unreadable in the panel.

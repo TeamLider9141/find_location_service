@@ -64,7 +64,7 @@ def create_dispatcher(
 
     # Outer middleware, on both update types: a driver who only taps buttons
     # still has to show up in the admin panel.
-    tracking = UserTrackingMiddleware(RecordUserVisitUseCase(users))
+    tracking = UserTrackingMiddleware(RecordUserVisitUseCase(users), admin_ids=admin_ids)
     dispatcher.message.outer_middleware(tracking)
     dispatcher.callback_query.outer_middleware(tracking)
 

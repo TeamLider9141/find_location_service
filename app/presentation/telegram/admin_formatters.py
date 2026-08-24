@@ -2,6 +2,7 @@ from datetime import datetime
 
 from app.application.use_cases.admin import AdminOverview, UserDetail, UsersPage
 from app.domain.entities.bot_user import BotUser
+from app.presentation.telegram.formatters import place_map_link
 from app.presentation.telegram.keyboards.categories import category_label
 
 EMPTY_DATABASE_MESSAGE = "Hali hech kim joy qo'shmagan."
@@ -77,10 +78,11 @@ def format_user_detail(detail: UserDetail) -> str:
 
     if detail.places:
         lines.append("")
-        lines.extend(
-            f"{index}) {place.name} ({category_label(place.category)})"
-            for index, place in enumerate(detail.places, start=1)
-        )
+        for index, place in enumerate(detail.places, start=1):
+            # The link lets the admin open a suspicious entry on the map
+            # without leaving the panel.
+            lines.append(f"{index}) {place.name} ({category_label(place.category)})")
+            lines.append(f"   {place_map_link(place)}")
 
     return "\n".join(lines)
 

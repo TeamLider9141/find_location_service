@@ -143,6 +143,16 @@ def test_a_user_detail_reports_activity_and_places() -> None:
     assert "9" in text
 
 
+def test_a_user_detail_links_every_place_to_the_map() -> None:
+    # The admin checks a suspicious entry by opening it on the map, not by
+    # reading raw coordinates.
+    detail = UserDetail(user=make_user(), places=[make_place()], searches=0)
+
+    text = format_user_detail(detail)
+
+    assert "https://www.google.com/maps/search/?api=1&query=55.75,37.61" in text
+
+
 def test_a_user_without_a_username_is_still_readable() -> None:
     detail = UserDetail(user=make_user(username=None), places=[], searches=0)
 

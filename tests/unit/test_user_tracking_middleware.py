@@ -24,12 +24,20 @@ class Handler:
 
 
 class ExplodingUsers(InMemoryUserRepository):
-    def record_seen(self, *args: object, **kwargs: object) -> None:
+    def record_seen(self, *args: object, **kwargs: object) -> bool:
         raise sqlite3.OperationalError("database is locked")
 
 
-def middleware_over(users) -> UserTrackingMiddleware:
-    return UserTrackingMiddleware(RecordUserVisitUseCase(users))
+class FakeBot:
+    def __init__(self) -> None:
+        self.sent: list[tuple[int, str]] = []
+
+    async def send_message(self, chat_id: int, text: str, **_: object) -> None:
+        self.sent.append((chat_id, text))
+
+
+def middleware_over(users, admin_ids: tuple[int, ...] = ()) -> UserTrackingMiddleware:
+    return UserTrackingMiddleware(RecordUserVisitUseCase(users), admin_ids=admin_ids)
 
 
 async def test_the_sender_is_recorded() -> None:
@@ -79,3 +87,53 @@ async def test_a_database_failure_does_not_swallow_the_update() -> None:
     )
 
     assert (handler.calls, result) == (1, "handled")
+
+
+async def test_the_first_visit_is_announced_to_the_admins() -> None:
+    bot = FakeBot()
+    middleware = middleware_over(InMemoryUserRepository(), admin_ids=(1, 2))
+
+    await middleware(Handler(), object(), {"event_from_user": FakeUser(42), "bot": bot})
+
+    assert [chat_id for chat_id, _ in bot.sent] == [1, 2]
+    assert "42" in bot.sent[0][1]
+
+
+async def test_a_returning_user_is_not_announced() -> None:
+    bot = FakeBot()
+    middleware = middleware_over(InMemoryUserRepository(), admin_ids=(1,))
+
+    await middleware(Handler(), object(), {"event_from_user": FakeUser(42), "bot": bot})
+    await middleware(Handler(), object(), {"event_from_user": FakeUser(42), "bot": bot})
+
+    assert len(bot.sent) == 1
+
+
+async def test_an_admins_own_first_visit_is_not_announced() -> None:
+    # "New user: <the admin>", delivered to that same admin, is noise not news.
+    bot = FakeBot()
+    middleware = middleware_over(InMemoryUserRepository(), admin_ids=(42,))
+
+    await middleware(Handler(), object(), {"event_from_user": FakeUser(42), "bot": bot})
+
+    assert bot.sent == []
+
+
+async def test_an_update_without_a_bot_still_reaches_the_handler() -> None:
+    # Announcing is optional; handling is not.
+    handler = Handler()
+    middleware = middleware_over(InMemoryUserRepository(), admin_ids=(1,))
+
+    result = await middleware(handler, object(), {"event_from_user": FakeUser(42)})
+
+    assert (handler.calls, result) == (1, "handled")
+
+
+async def test_a_database_failure_is_not_announced() -> None:
+    # If the write failed, "new" is unknown; silence beats a false alarm.
+    bot = FakeBot()
+    middleware = middleware_over(ExplodingUsers(), admin_ids=(1,))
+
+    await middleware(Handler(), object(), {"event_from_user": FakeUser(42), "bot": bot})
+
+    assert bot.sent == []

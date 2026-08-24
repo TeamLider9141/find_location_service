@@ -4,6 +4,7 @@ from aiogram.exceptions import TelegramAPIError
 from app.presentation.telegram.errors import report_service_error
 
 STARTUP_MESSAGE = "✅ Bot ishga tushdi."
+NEW_USER_PREFIX = "🆕 Yangi foydalanuvchi"
 
 
 async def announce_startup(bot: Bot, admin_ids: tuple[int, ...]) -> None:
@@ -12,9 +13,35 @@ async def announce_startup(bot: Bot, admin_ids: tuple[int, ...]) -> None:
     A silent restart is indistinguishable from a crash that nobody noticed, and
     this is the only signal an admin gets without opening a server shell.
     """
+    await _tell_admins(bot, admin_ids, STARTUP_MESSAGE, context="startup notice")
+
+
+async def announce_new_user(
+    bot: Bot,
+    admin_ids: tuple[int, ...],
+    full_name: str,
+    username: str | None,
+    user_id: int,
+) -> None:
+    """Tell the admins somebody opened the bot for the first time."""
+    # Telegram accepts accounts whose visible name is blank. The id is the one
+    # label that always exists, so the notice falls back to it.
+    name = full_name or str(user_id)
+    label = f"{name} (@{username})" if username else name
+    await _tell_admins(
+        bot,
+        admin_ids,
+        f"{NEW_USER_PREFIX}: {label}\nID: {user_id}",
+        context="new user notice",
+    )
+
+
+async def _tell_admins(
+    bot: Bot, admin_ids: tuple[int, ...], text: str, context: str
+) -> None:
     for admin_id in admin_ids:
         try:
-            await bot.send_message(admin_id, STARTUP_MESSAGE)
+            await bot.send_message(admin_id, text)
         except TelegramAPIError as error:
             # An admin who has never opened the bot has no chat to write to.
-            report_service_error(error, f"startup notice to admin {admin_id}")
+            report_service_error(error, f"{context} to admin {admin_id}")

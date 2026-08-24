@@ -30,6 +30,12 @@ NO_RESULTS_MESSAGE = (
 )
 
 
+def place_map_link(place: Place) -> str:
+    latitude = place.coordinates.latitude
+    longitude = place.coordinates.longitude
+    return f"https://www.google.com/maps/search/?api=1&query={latitude},{longitude}"
+
+
 def format_place_card(place: Place) -> str:
     latitude = place.coordinates.latitude
     longitude = place.coordinates.longitude
@@ -40,7 +46,7 @@ def format_place_card(place: Place) -> str:
         f"{category_label(place.category)}\n"
         f"{note_line}"
         f"\n{latitude}, {longitude}\n"
-        f"https://www.google.com/maps/search/?api=1&query={latitude},{longitude}"
+        f"{place_map_link(place)}"
     )
 
 
