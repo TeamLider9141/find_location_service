@@ -75,7 +75,10 @@ def format_place_preview(
     )
 
 
-ROAD_DISTANCE_NOTE = "yo'l bo'yicha"
+# Both are approximations and say so: the router snaps pins to the nearest
+# mapped road and works from OpenStreetMap, so a few kilometres of drift
+# against a navigator is normal. The exact route lives behind the map link.
+ROAD_DISTANCE_NOTE = "yo'l bo'yicha, taxminan"
 STRAIGHT_DISTANCE_NOTE = "to'g'ri chiziq bo'yicha"
 
 
