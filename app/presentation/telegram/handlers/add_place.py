@@ -6,9 +6,8 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
 from app.application.use_cases.access import RequestAddAccessUseCase
-from app.domain.value_objects.add_access import AddAccessStatus
-
 from app.application.use_cases.places import AddPlaceUseCase
+from app.domain.value_objects.add_access import AddAccessStatus
 from app.domain.value_objects.category import PlaceCategory
 from app.domain.value_objects.coordinates import Coordinates
 from app.presentation.telegram.access import is_admin
@@ -21,6 +20,7 @@ from app.presentation.telegram.errors import (
 from app.presentation.telegram.formatters import (
     format_duplicate_warning,
     format_place_card,
+    format_place_preview,
 )
 from app.presentation.telegram.keyboards.menu import (
     ADD_PLACE_BUTTON,
@@ -32,6 +32,7 @@ from app.presentation.telegram.keyboards.places import (
     build_border_choice_keyboard,
     build_category_choice_keyboard,
     build_duplicate_confirmation_keyboard,
+    build_preview_keyboard,
 )
 from app.presentation.telegram.location_input import parse_coordinates_from_text
 from app.presentation.telegram.notifications import announce_add_request
@@ -39,21 +40,25 @@ from app.presentation.telegram.states import AddPlace
 
 router = Router(name="add_place")
 
-ASK_NAME_MESSAGE = "Joy nomini yozing. Masalan: Газпром yoki Кафе У Дороги."
-ASK_CATEGORY_MESSAGE = "Kategoriyani tanlang."
-BLANK_NAME_MESSAGE = "Nom bo'sh bo'lmasligi kerak. Joy nomini yozing."
+# The flow, in the order the driver walks it: location first — it is the one
+# thing they have to be standing at — then category, name, note, and a preview
+# to look at before anything is written.
 ASK_LOCATION_MESSAGE = (
-    "Endi lokatsiyani yuboring.\n\n"
+    "Joy lokatsiyasini yuboring.\n\n"
     "📎 → Lokatsiya, yoki xarita linkini, yoki koordinatani yozing: 55.75, 37.61"
 )
 ASK_LOCATION_AGAIN_MESSAGE = (
     "Buni lokatsiya sifatida o'qiy olmadim. "
     "Telegram lokatsiyasini yuboring yoki koordinatani yozing: 55.75, 37.61"
 )
+ASK_CATEGORY_MESSAGE = "Kategoriyani tanlang."
+ASK_NAME_MESSAGE = "Joy nomini yozing. Masalan: Газпром yoki Кафе У Дороги."
+BLANK_NAME_MESSAGE = "Nom bo'sh bo'lmasligi kerak. Joy nomini yozing."
 ASK_NOTE_MESSAGE = (
     "Izoh qo'shasizmi? Masalan: M5, 120-km, kechasi ochiq.\n"
     "Kerak bo'lmasa /skip yuboring."
 )
+PREVIEW_MESSAGE = "Ko'rib chiqing — saqlansa sizga va boshqa haydovchilarga shunday ko'rinadi:"
 INVALID_CATEGORY_MESSAGE = "Bunday kategoriya yo'q. Ro'yxatdan tanlang."
 CANCELLED_MESSAGE = "Bekor qilindi. Boshlang'ich menyuga qaytdingiz."
 SAVE_FAILED_MESSAGE = "Saqlab bo'lmadi. Qaytadan urinib ko'ring."
@@ -80,12 +85,12 @@ async def handle_add_place_start(
         if not allowed:
             return
 
-    # Clear before setting the state: an abandoned flow leaves its name and
-    # coordinates in storage, and carrying them into a fresh attempt would file
-    # the new place at the old location.
+    # Clear before setting the state: an abandoned flow leaves its coordinates
+    # in storage, and carrying them into a fresh attempt would file the new
+    # place at the old location.
     await state.set_data({})
-    await state.set_state(AddPlace.name)
-    await message.answer(ASK_NAME_MESSAGE)
+    await state.set_state(AddPlace.location)
+    await message.answer(ASK_LOCATION_MESSAGE)
 
 
 async def _pass_the_gate(
@@ -130,14 +135,17 @@ async def _pass_the_gate(
     return False
 
 
-@router.message(AddPlace.name, F.text)
-async def handle_name(message: Message, state: FSMContext) -> None:
-    name = (message.text or "").strip()
-    if not name:
-        await message.answer(BLANK_NAME_MESSAGE)
+@router.message(AddPlace.location)
+async def handle_location(message: Message, state: FSMContext) -> None:
+    coordinates = _coordinates_from_message(message)
+    if coordinates is None:
+        await message.answer(ASK_LOCATION_AGAIN_MESSAGE)
         return
 
-    await state.update_data(name=name)
+    await state.update_data(
+        latitude=coordinates.latitude,
+        longitude=coordinates.longitude,
+    )
     await state.set_state(AddPlace.category)
     await message.answer(
         ASK_CATEGORY_MESSAGE,
@@ -168,45 +176,208 @@ async def handle_category(callback_query: CallbackQuery, state: FSMContext) -> N
         return
 
     await state.update_data(category=category.value)
-    await state.set_state(AddPlace.location)
-    await message.answer(ASK_LOCATION_MESSAGE)
+
+    # Two roads lead here: the flow's own category step, and the preview's
+    # "change category" button. The second returns to the preview — the driver
+    # was already done writing.
+    data = await state.get_data()
+    if data.get("editing_category"):
+        await state.update_data(editing_category=False)
+        await _show_preview(message, state)
+    else:
+        await state.set_state(AddPlace.name)
+        await message.answer(ASK_NAME_MESSAGE)
+
     await callback_query.answer()
 
 
-@router.message(AddPlace.location)
-async def handle_location(
-    message: Message,
-    state: FSMContext,
-    add_place: AddPlaceUseCase,
-) -> None:
-    coordinates = _coordinates_from_message(message)
-    if coordinates is None:
-        await message.answer(ASK_LOCATION_AGAIN_MESSAGE)
+@router.message(AddPlace.name, F.text)
+async def handle_name(message: Message, state: FSMContext) -> None:
+    name = (message.text or "").strip()
+    if not name:
+        await message.answer(BLANK_NAME_MESSAGE)
         return
 
-    await state.update_data(
-        latitude=coordinates.latitude,
-        longitude=coordinates.longitude,
+    await state.update_data(name=name)
+    await state.set_state(AddPlace.note)
+    await message.answer(ASK_NOTE_MESSAGE)
+
+
+@router.message(AddPlace.note, Command("skip"))
+async def handle_skip_note(message: Message, state: FSMContext) -> None:
+    await state.update_data(note="")
+    await _show_preview(message, state)
+
+
+@router.message(AddPlace.note, F.text)
+async def handle_note(message: Message, state: FSMContext) -> None:
+    await state.update_data(note=message.text or "")
+    await _show_preview(message, state)
+
+
+async def _show_preview(message: Message, state: FSMContext) -> None:
+    """Show the place exactly as everyone will see it, before it is written."""
+    data = await state.get_data()
+    try:
+        preview = format_place_preview(
+            name=str(data["name"]),
+            category=PlaceCategory(str(data["category"])),
+            coordinates=Coordinates(
+                latitude=float(data["latitude"]),
+                longitude=float(data["longitude"]),
+            ),
+            note=str(data.get("note", "")),
+        )
+    # A flow that lost a step leaves the state short of a key; better to start
+    # over than to preview a place that cannot be saved.
+    except (KeyError, ValueError) as error:
+        report_service_error(error, "place preview")
+        await state.clear()
+        await message.answer(SAVE_FAILED_MESSAGE)
+        return
+
+    await state.set_state(AddPlace.preview)
+    await message.answer(
+        f"{PREVIEW_MESSAGE}\n\n{preview}",
+        reply_markup=build_preview_keyboard(),
     )
 
-    data = await state.get_data()
-    # Ask before the note step, not at save time: a driver who is about to
-    # re-add a place someone else already shared should find out before
-    # spending effort on it.
-    duplicates = add_place.find_duplicates(
-        name=str(data["name"]),
-        coordinates=coordinates,
+
+@router.callback_query(AddPlace.preview, F.data == "add_place:preview:category")
+async def handle_preview_change_category(
+    callback_query: CallbackQuery, state: FSMContext
+) -> None:
+    message = answerable_message(callback_query)
+    if message is None:
+        await state.clear()
+        await callback_query.answer(EXPIRED_MESSAGE)
+        return
+
+    await state.update_data(editing_category=True)
+    await state.set_state(AddPlace.category)
+    await message.answer(
+        ASK_CATEGORY_MESSAGE,
+        reply_markup=build_category_choice_keyboard("add_place:category"),
     )
+    await callback_query.answer()
+
+
+@router.callback_query(AddPlace.preview, F.data == "add_place:preview:save")
+async def handle_preview_save(
+    callback_query: CallbackQuery,
+    state: FSMContext,
+    add_place: AddPlaceUseCase,
+    admin_ids: tuple[int, ...],
+) -> None:
+    message = answerable_message(callback_query)
+    if message is None:
+        await state.clear()
+        await callback_query.answer(EXPIRED_MESSAGE)
+        return
+
+    data = await state.get_data()
+    # The duplicate check runs at the moment of decision: earlier the name did
+    # not exist yet, later the copy would already be written.
+    try:
+        duplicates = add_place.find_duplicates(
+            name=str(data.get("name", "")),
+            coordinates=Coordinates(
+                latitude=float(data.get("latitude", 0.0)),
+                longitude=float(data.get("longitude", 0.0)),
+            ),
+        )
+    except sqlite3.Error as error:
+        report_service_error(error, "duplicate check")
+        await message.answer(DATABASE_ERROR_MESSAGE)
+        await callback_query.answer()
+        return
+
     if duplicates:
         await state.set_state(AddPlace.duplicate)
         await message.answer(
             format_duplicate_warning(duplicates),
             reply_markup=build_duplicate_confirmation_keyboard(),
         )
+        await callback_query.answer()
         return
 
-    await state.set_state(AddPlace.note)
-    await message.answer(ASK_NOTE_MESSAGE)
+    await _save(message, state, add_place, admin_ids, actor=callback_query)
+    await callback_query.answer()
+
+
+@router.callback_query(AddPlace.duplicate, F.data.startswith("add_place:duplicate:"))
+async def handle_duplicate_answer(
+    callback_query: CallbackQuery,
+    state: FSMContext,
+    add_place: AddPlaceUseCase,
+    admin_ids: tuple[int, ...],
+) -> None:
+    message = answerable_message(callback_query)
+    if message is None:
+        await state.clear()
+        await callback_query.answer(EXPIRED_MESSAGE)
+        return
+
+    # Only an explicit yes continues. Anything else — including a garbled
+    # callback — falls through to the cancel branch rather than being read as
+    # consent to add a second copy of a place someone already shared.
+    if callback_query.data == "add_place:duplicate:yes":
+        await _save(message, state, add_place, admin_ids, actor=callback_query)
+    else:
+        await state.clear()
+        await message.answer(
+            CANCELLED_MESSAGE,
+            reply_markup=build_main_menu_keyboard(is_admin=is_admin(callback_query, admin_ids)),
+        )
+
+    await callback_query.answer()
+
+
+async def _save(
+    message: Message,
+    state: FSMContext,
+    add_place: AddPlaceUseCase,
+    admin_ids: tuple[int, ...],
+    actor: object,
+) -> None:
+    """Write the place the preview promised. ``actor`` is whoever tapped —
+    the message under a callback belongs to the bot, not the driver."""
+    menu = build_main_menu_keyboard(is_admin=is_admin(actor, admin_ids))
+    data = await state.get_data()
+    user_id = user_id_of(actor)
+    if user_id is None:
+        await state.clear()
+        return
+
+    try:
+        place = add_place.execute(
+            user_id=user_id,
+            name=str(data["name"]),
+            category=PlaceCategory(str(data["category"])),
+            coordinates=Coordinates(
+                latitude=float(data["latitude"]),
+                longitude=float(data["longitude"]),
+            ),
+            note=str(data.get("note", "")),
+        )
+    # A flow that lost a step leaves the state short of a key, and a place
+    # written without it would land at the wrong coordinates rather than fail.
+    except (KeyError, ValueError) as error:
+        report_service_error(error, "add place")
+        await state.clear()
+        await message.answer(SAVE_FAILED_MESSAGE, reply_markup=menu)
+        return
+    except sqlite3.Error as error:
+        report_service_error(error, "add place")
+        await state.clear()
+        await message.answer(DATABASE_ERROR_MESSAGE, reply_markup=menu)
+        return
+
+    await state.clear()
+    await message.answer(
+        f"✅ Saqlandi.\n\n{format_place_card(place)}",
+        reply_markup=menu,
+    )
 
 
 def _parse_category(data: str | None) -> PlaceCategory | None:
@@ -236,97 +407,3 @@ def _coordinates_from_message(message: Message) -> Coordinates | None:
         return parse_coordinates_from_text(text)
 
     return None
-
-
-@router.callback_query(AddPlace.duplicate, F.data.startswith("add_place:duplicate:"))
-async def handle_duplicate_answer(
-    callback_query: CallbackQuery,
-    state: FSMContext,
-    admin_ids: tuple[int, ...],
-) -> None:
-    message = answerable_message(callback_query)
-    if message is None:
-        await state.clear()
-        await callback_query.answer(EXPIRED_MESSAGE)
-        return
-
-    # Only an explicit yes continues. Anything else — including a garbled
-    # callback — falls through to the cancel branch rather than being read as
-    # consent to add a second copy of a place someone already shared.
-    if callback_query.data == "add_place:duplicate:yes":
-        await state.set_state(AddPlace.note)
-        await message.answer(ASK_NOTE_MESSAGE)
-    else:
-        await state.clear()
-        await message.answer(
-            CANCELLED_MESSAGE,
-            reply_markup=build_main_menu_keyboard(is_admin=is_admin(callback_query, admin_ids)),
-        )
-
-    await callback_query.answer()
-
-
-@router.message(AddPlace.note, Command("skip"))
-async def handle_skip_note(
-    message: Message,
-    state: FSMContext,
-    add_place: AddPlaceUseCase,
-    admin_ids: tuple[int, ...],
-) -> None:
-    await _save(message, state, add_place, note="", admin_ids=admin_ids)
-
-
-@router.message(AddPlace.note, F.text)
-async def handle_note(
-    message: Message,
-    state: FSMContext,
-    add_place: AddPlaceUseCase,
-    admin_ids: tuple[int, ...],
-) -> None:
-    await _save(message, state, add_place, note=message.text or "", admin_ids=admin_ids)
-
-
-
-async def _save(
-    message: Message,
-    state: FSMContext,
-    add_place: AddPlaceUseCase,
-    note: str,
-    admin_ids: tuple[int, ...] = (),
-) -> None:
-    menu = build_main_menu_keyboard(is_admin=is_admin(message, admin_ids))
-    data = await state.get_data()
-    user_id = user_id_of(message)
-    if user_id is None:
-        await state.clear()
-        return
-
-    try:
-        place = add_place.execute(
-            user_id=user_id,
-            name=str(data["name"]),
-            category=PlaceCategory(str(data["category"])),
-            coordinates=Coordinates(
-                latitude=float(data["latitude"]),
-                longitude=float(data["longitude"]),
-            ),
-            note=note,
-        )
-    # A flow that lost a step leaves the state short of a key, and a place
-    # written without it would land at the wrong coordinates rather than fail.
-    except (KeyError, ValueError) as error:
-        report_service_error(error, "add place")
-        await state.clear()
-        await message.answer(SAVE_FAILED_MESSAGE, reply_markup=menu)
-        return
-    except sqlite3.Error as error:
-        report_service_error(error, "add place")
-        await state.clear()
-        await message.answer(DATABASE_ERROR_MESSAGE, reply_markup=menu)
-        return
-
-    await state.clear()
-    await message.answer(
-        f"✅ Saqlandi.\n\n{format_place_card(place)}",
-        reply_markup=menu,
-    )

@@ -2,11 +2,14 @@ from aiogram.fsm.state import State, StatesGroup
 
 
 class AddPlace(StatesGroup):
-    name = State()
-    category = State()
+    # Declared in the order the driver walks them: location first — it is the
+    # one thing they have to be standing at.
     location = State()
-    duplicate = State()
+    category = State()
+    name = State()
     note = State()
+    preview = State()
+    duplicate = State()
 
 
 class FindPlace(StatesGroup):

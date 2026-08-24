@@ -30,6 +30,7 @@ from app.presentation.telegram.handlers.add_place import (
     handle_duplicate_answer,
     handle_location,
     handle_name,
+    handle_preview_save,
     handle_skip_note,
 )
 from app.presentation.telegram.handlers.find_place import (
@@ -96,19 +97,17 @@ class Journey:
         await handle_add_place_start(
             FakeMessage(user_id=user_id), state, self.request_add_access, admin_ids=()
         )
-        await handle_name(FakeMessage(text=name, user_id=user_id), state)
+        await handle_location(FakeLocationMessage(*coordinates, user_id=user_id), state)
         await handle_category(
             FakeCallbackQuery(f"add_place:category:{category}", user_id=user_id), state
         )
-        location = FakeLocationMessage(*coordinates, user_id=user_id)
-        await handle_location(location, state, self.add_place)
+        await handle_name(FakeMessage(text=name, user_id=user_id), state)
+        await handle_skip_note(FakeMessage(text="/skip", user_id=user_id), state)
 
-        if await state.get_state() == AddPlace.duplicate.state:
-            return location
-
-        note = FakeMessage(text="/skip", user_id=user_id)
-        await handle_skip_note(note, state, self.add_place, ())
-        return note
+        # The preview is where the writing decision lives now.
+        save_tap = FakeCallbackQuery("add_place:preview:save", user_id=user_id)
+        await handle_preview_save(save_tap, state, self.add_place, ())
+        return save_tap.message
 
     async def search(self, query: str) -> FakeMessage:
         message = FakeMessage(text=query)
@@ -155,7 +154,9 @@ async def test_refusing_the_duplicate_leaves_one_place(journey: Journey) -> None
     await journey.add("Газпром", "fuel", STATION)
     await journey.add("Газпром 24", "fuel", STATION)
 
-    await handle_duplicate_answer(FakeCallbackQuery("add_place:duplicate:no"), journey.state, ())
+    await handle_duplicate_answer(
+        FakeCallbackQuery("add_place:duplicate:no"), journey.state, journey.add_place, ()
+    )
 
     assert [place.name for place in journey.list_my_places.execute(DRIVER)] == ["Газпром"]
 
@@ -164,9 +165,10 @@ async def test_confirming_the_duplicate_saves_both(journey: Journey) -> None:
     await journey.add("Газпром", "fuel", STATION)
     await journey.add("Газпром 24", "fuel", STATION)
 
-    await handle_duplicate_answer(FakeCallbackQuery("add_place:duplicate:yes"), journey.state, ())
-    # Consent only moves the flow on to the note step; the write happens there.
-    await handle_skip_note(FakeMessage(text="/skip"), journey.state, journey.add_place, ())
+    # Consent is the write now: the note was already taken before the preview.
+    await handle_duplicate_answer(
+        FakeCallbackQuery("add_place:duplicate:yes"), journey.state, journey.add_place, ()
+    )
 
     assert len(journey.list_my_places.execute(DRIVER)) == 2
 
@@ -247,7 +249,7 @@ async def test_cancelling_halfway_saves_nothing(journey: Journey) -> None:
     await handle_add_place_start(
         FakeMessage(), journey.state, journey.request_add_access, admin_ids=()
     )
-    await handle_name(FakeMessage(text="Газпром"), journey.state)
+    await handle_location(FakeLocationMessage(*STATION), journey.state)
     await handle_category(FakeCallbackQuery("add_place:category:fuel"), journey.state)
 
     await handle_cancel(FakeMessage(text="/cancel"), journey.state, ())
@@ -294,9 +296,9 @@ async def test_adding_opens_only_after_the_admins_blessing(journey: Journey) -> 
     )
     assert bot.sent[-1][0] == NEWCOMER
 
-    # ...and the same tap now opens the flow.
+    # ...and the same tap now opens the flow, which begins at the location.
     second_try = FakeMessage(user_id=NEWCOMER)
     await handle_add_place_start(
         second_try, state, journey.request_add_access, admin_ids=(ADMIN,), bot=bot
     )
-    assert await state.get_state() == AddPlace.name.state
+    assert await state.get_state() == AddPlace.location.state

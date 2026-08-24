@@ -1,6 +1,8 @@
 import html
 
 from app.domain.entities.place import Place
+from app.domain.value_objects.category import PlaceCategory
+from app.domain.value_objects.coordinates import Coordinates
 from app.domain.value_objects.user_settings import UserSettings
 from app.presentation.telegram.keyboards.categories import category_label
 
@@ -39,16 +41,34 @@ def place_map_link(place: Place) -> str:
 
 
 def format_place_card(place: Place) -> str:
-    latitude = place.coordinates.latitude
-    longitude = place.coordinates.longitude
-    note_line = f"📝 {place.note}\n" if place.note else ""
+    return format_place_preview(
+        name=place.name,
+        category=place.category,
+        coordinates=place.coordinates,
+        note=place.note,
+    )
+
+
+def format_place_preview(
+    name: str,
+    category: PlaceCategory,
+    coordinates: Coordinates,
+    note: str,
+) -> str:
+    """The card as everyone will see it — used both for the saved place and
+    for the preview shown before anything is written."""
+    note_line = f"📝 {note}\n" if note else ""
+    link = (
+        "https://www.google.com/maps/search/?api=1"
+        f"&query={coordinates.latitude},{coordinates.longitude}"
+    )
 
     return (
-        f"📍 {place.name}\n"
-        f"{category_label(place.category)}\n"
+        f"📍 {name}\n"
+        f"{category_label(category)}\n"
         f"{note_line}"
-        f"\n{latitude}, {longitude}\n"
-        f"{place_map_link(place)}"
+        f"\n{coordinates.latitude}, {coordinates.longitude}\n"
+        f"{link}"
     )
 
 

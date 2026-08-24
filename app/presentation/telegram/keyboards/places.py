@@ -97,6 +97,25 @@ def build_place_results_keyboard(place_ids: list[int]) -> InlineKeyboardMarkup:
     )
 
 
+def build_preview_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="✅ Saqlash",
+                    callback_data="add_place:preview:save",
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="🔄 Kategoriyani qayta tanlash",
+                    callback_data="add_place:preview:category",
+                )
+            ],
+        ]
+    )
+
+
 def build_duplicate_confirmation_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
