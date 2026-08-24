@@ -101,8 +101,11 @@ def format_user_detail(detail: UserDetail) -> str:
                 f'{index}) <a href="{place_map_link(place)}">{name}</a>'
                 f" ({category_label(place.category)})"
             )
+            # Names arrive with their own newlines inside; without a separator
+            # the entries read as one solid block.
+            lines.append("")
 
-    return "\n".join(lines)
+    return "\n".join(lines).rstrip()
 
 
 def format_admin_places(category: PlaceCategory, groups: list[AuthorPlaces]) -> str:
@@ -132,8 +135,10 @@ def format_admin_places(category: PlaceCategory, groups: list[AuthorPlaces]) -> 
                 break
             name = html.escape(place.name)
             lines.append(f'   📍 <a href="{place_map_link(place)}">{name}</a>')
+            # Multi-line names would otherwise weld neighbouring entries
+            # into one block.
+            lines.append("")
             shown += 1
-        lines.append("")
 
     remaining = total - shown
     if remaining > 0:

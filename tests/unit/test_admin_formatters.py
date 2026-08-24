@@ -156,6 +156,21 @@ def test_activity_stamps_are_shown_in_tashkent_time() -> None:
     assert "14:05" not in text
 
 
+def test_user_detail_entries_are_separated_by_a_blank_line() -> None:
+    # Names arrive with their own newlines inside; without a separator the
+    # entries read as one solid block.
+    detail = UserDetail(
+        user=make_user(),
+        places=[make_place(), make_place(2, "Лукойл")],
+        searches=0,
+    )
+
+    text = format_user_detail(detail)
+
+    assert "\n\n2)" in text
+    assert not text.endswith("\n")
+
+
 def test_a_user_detail_makes_every_place_name_the_map_link() -> None:
     # The admin checks a suspicious entry by opening it on the map; the name
     # itself is the link, not a raw URL under it.
