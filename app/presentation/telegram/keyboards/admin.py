@@ -11,6 +11,7 @@ def build_admin_menu_keyboard() -> InlineKeyboardMarkup:
         inline_keyboard=[
             [InlineKeyboardButton(text="📊 Statistika", callback_data="admin:stats")],
             [InlineKeyboardButton(text="👥 Foydalanuvchilar", callback_data="admin:users:0")],
+            [InlineKeyboardButton(text="🗺 Userlar manzillari", callback_data="admin:places")],
             [InlineKeyboardButton(text="🔎 Top qidiruvlar", callback_data="admin:searches")],
             [InlineKeyboardButton(text="📢 Xabar yuborish", callback_data="admin:broadcast")],
         ]

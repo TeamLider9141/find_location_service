@@ -7,6 +7,7 @@ from aiogram.fsm.storage.memory import MemoryStorage
 from app.application.use_cases.admin import RecordSearchUseCase
 from app.application.use_cases.places import (
     AddPlaceUseCase,
+    CountPlacesByCategoryUseCase,
     FindPlacesUseCase,
     GetPlaceUseCase,
     NearbyPlacesUseCase,
@@ -93,6 +94,11 @@ def make_state(user_id: int = 42) -> FSMContext:
     )
 
 
+class ExplodingPlaces(InMemoryPlaceRepository):
+    def count_by_category(self, exclude_author_ids: tuple[int, ...] = ()) -> dict:
+        raise sqlite3.OperationalError("database is locked")
+
+
 def seeded_repository() -> InMemoryPlaceRepository:
     repository = InMemoryPlaceRepository()
     add = AddPlaceUseCase(repository)
@@ -114,11 +120,36 @@ def seeded_repository() -> InMemoryPlaceRepository:
 async def test_find_start_offers_category_buttons() -> None:
     message = FakeMessage()
 
-    await handle_find_start(message)
+    await handle_find_start(message, CountPlacesByCategoryUseCase(seeded_repository()))
 
     keyboard = message.answers[0]["reply_markup"]
     callback_data = [row[0].callback_data for row in keyboard.inline_keyboard]
     assert "find:category:fuel" in callback_data
+
+
+async def test_the_category_buttons_carry_their_counts() -> None:
+    # A driver picks a category knowing whether anything waits behind it; an
+    # empty one keeps its plain label rather than advertising "(0 ta)".
+    message = FakeMessage()
+
+    await handle_find_start(message, CountPlacesByCategoryUseCase(seeded_repository()))
+
+    keyboard = message.answers[0]["reply_markup"]
+    labels = [row[0].text for row in keyboard.inline_keyboard]
+    fuel = next(label for label in labels if "Gas" in label)
+    hotel = next(label for label in labels if "Mehmonxona" in label)
+    assert "(1 ta)" in fuel
+    assert "ta)" not in hotel
+
+
+async def test_a_counting_failure_does_not_block_the_search() -> None:
+    # The numbers are decoration; the keyboard is the feature.
+    message = FakeMessage()
+
+    await handle_find_start(message, CountPlacesByCategoryUseCase(ExplodingPlaces()))
+
+    keyboard = message.answers[0]["reply_markup"]
+    assert keyboard.inline_keyboard
 
 
 async def test_text_query_finds_a_place_across_alphabets() -> None:

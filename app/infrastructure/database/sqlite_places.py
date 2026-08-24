@@ -243,10 +243,15 @@ class SQLitePlaceRepository:
 
         return int(row["total"])
 
-    def count_by_category(self) -> dict[PlaceCategory, int]:
+    def count_by_category(
+        self, exclude_author_ids: tuple[int, ...] = ()
+    ) -> dict[PlaceCategory, int]:
+        placeholders = ",".join("?" * len(exclude_author_ids))
+        where = f"WHERE added_by_user_id NOT IN ({placeholders})" if exclude_author_ids else ""
         with closing(self._connect()) as connection:
             rows = connection.execute(
-                "SELECT category, COUNT(*) AS total FROM places GROUP BY category"
+                f"SELECT category, COUNT(*) AS total FROM places {where} GROUP BY category",
+                exclude_author_ids,
             ).fetchall()
 
         return {PlaceCategory(str(row["category"])): int(row["total"]) for row in rows}

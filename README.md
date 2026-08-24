@@ -13,13 +13,16 @@ added it.
   admins, and the driver can add only after an admin allows it. Searching needs no approval.
 - Duplicate warning when a similar name already exists within 200 m
 - Search by name across Latin and Cyrillic spellings
-- Browse by category
+- Browse by category — each button carries its place count; empty categories
+  keep a plain label
 - Find places near your current location, sorted by distance
 - Manage the places you contributed — change category, delete
 - Per-user settings for search radius and result count, kept across restarts
 - Admin panel — statistics, user list, per-user detail with a map link for every
   place they added, top searches, moderation delete, broadcast, add-permission
-  approve/revoke. Reached with `/admin` or the 🛠 button
+  approve/revoke, and a location browser: pick a category, see its places
+  grouped by the driver who added them, with map links. Reached with `/admin`
+  or the 🛠 button
 - Two admin rungs: `ADMIN_IDS` may look at everything and manage add permissions;
   `SUPER_ADMIN_IDS` may additionally delete places and broadcast. The panel looks
   the same on both rungs — a super-only button refuses the tap with an alert

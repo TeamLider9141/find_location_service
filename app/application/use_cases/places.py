@@ -71,6 +71,16 @@ class FindPlacesUseCase:
         return self._repository.search(name=name, category=category, limit=limit)
 
 
+class CountPlacesByCategoryUseCase:
+    """How many places each category holds — the numbers on the search keyboard."""
+
+    def __init__(self, repository: PlaceRepository) -> None:
+        self._repository = repository
+
+    def execute(self, exclude_author_ids: tuple[int, ...] = ()) -> dict[PlaceCategory, int]:
+        return self._repository.count_by_category(exclude_author_ids=exclude_author_ids)
+
+
 class NearbyPlacesUseCase:
     def __init__(self, repository: PlaceRepository) -> None:
         self._repository = repository

@@ -9,6 +9,7 @@ from aiogram.types import CallbackQuery, Message
 
 from app.application.use_cases.access import DecideAddAccessUseCase, RevokeAddAccessUseCase
 from app.application.use_cases.admin import (
+    AdminPlacesByCategoryUseCase,
     DeletePlaceAsAdminUseCase,
     GetAdminOverviewUseCase,
     GetUserDetailUseCase,
@@ -16,8 +17,11 @@ from app.application.use_cases.admin import (
     ListUsersPageUseCase,
     TopSearchesUseCase,
 )
+from app.application.use_cases.places import CountPlacesByCategoryUseCase
+from app.domain.value_objects.category import PlaceCategory
 from app.presentation.telegram.admin_formatters import (
     format_admin_overview,
+    format_admin_places,
     format_broadcast_preview,
     format_broadcast_result,
     format_top_searches,
@@ -40,6 +44,7 @@ from app.presentation.telegram.keyboards.admin import (
     build_users_page_keyboard,
 )
 from app.presentation.telegram.keyboards.menu import ADMIN_BUTTON
+from app.presentation.telegram.keyboards.places import build_category_choice_keyboard
 from app.presentation.telegram.states import AdminBroadcast
 
 router = Router(name="admin")
@@ -60,6 +65,7 @@ ACCESS_GRANTED_USER_MESSAGE = (
     "✅ Admin joy qo'shishga ruxsat berdi. ➕ Joy qo'shish tugmasini bosing."
 )
 ACCESS_DENIED_USER_MESSAGE = "⛔ Admin hozircha joy qo'shishga ruxsat bermadi."
+CHOOSE_CATEGORY_MESSAGE = "Kategoriyani tanlang."
 ACCESS_REVOKED_MESSAGE = "🚫 Ruxsat olib tashlandi"
 ACCESS_REVOKED_USER_MESSAGE = "🚫 Admin joy qo'shish ruxsatingizni bekor qildi."
 SUPER_ADMIN_ONLY_MESSAGE = "Bu faqat super admin uchun. Siz buni qila olmaysiz."
@@ -131,9 +137,7 @@ async def handle_admin_users(
         await callback_query.answer(INVALID_SELECTION_MESSAGE)
         return
 
-    # The ordinary rung is not shown the super admins at all — not their row,
-    # not their count.
-    hidden = () if is_admin(callback_query, super_admin_ids) else super_admin_ids
+    hidden = _hidden_ids(callback_query, super_admin_ids)
     try:
         page = list_users_page.execute(
             page=page_number, page_size=USERS_PAGE_SIZE, exclude_ids=hidden
@@ -186,6 +190,66 @@ async def handle_admin_user_detail(
         format_user_detail(detail),
         reply_markup=build_user_detail_keyboard(detail.places, user_id=detail.user.id),
     )
+    await callback_query.answer()
+
+
+@router.callback_query(F.data == "admin:places")
+async def handle_admin_places(
+    callback_query: CallbackQuery,
+    admin_ids: tuple[int, ...],
+    super_admin_ids: tuple[int, ...],
+    count_places_by_category: CountPlacesByCategoryUseCase,
+) -> None:
+    """Open the location browser: the category keyboard, with counts."""
+    message = await _open(callback_query, admin_ids)
+    if message is None:
+        return
+
+    try:
+        counts = count_places_by_category.execute(
+            exclude_author_ids=_hidden_ids(callback_query, super_admin_ids)
+        )
+    except sqlite3.Error as error:
+        report_service_error(error, "admin category counts")
+        await message.answer(DATABASE_ERROR_MESSAGE)
+        await callback_query.answer()
+        return
+
+    await message.answer(
+        CHOOSE_CATEGORY_MESSAGE,
+        reply_markup=build_category_choice_keyboard("admin:places_cat", counts),
+    )
+    await callback_query.answer()
+
+
+@router.callback_query(F.data.startswith("admin:places_cat:"))
+async def handle_admin_places_category(
+    callback_query: CallbackQuery,
+    admin_ids: tuple[int, ...],
+    super_admin_ids: tuple[int, ...],
+    admin_places_by_category: AdminPlacesByCategoryUseCase,
+) -> None:
+    """One category's places, grouped by the driver who added them."""
+    message = await _open(callback_query, admin_ids)
+    if message is None:
+        return
+
+    category = _parse_category(callback_query.data, prefix="admin:places_cat:")
+    if category is None:
+        await callback_query.answer(INVALID_SELECTION_MESSAGE)
+        return
+
+    try:
+        groups = admin_places_by_category.execute(
+            category, exclude_author_ids=_hidden_ids(callback_query, super_admin_ids)
+        )
+    except sqlite3.Error as error:
+        report_service_error(error, "admin places by category")
+        await message.answer(DATABASE_ERROR_MESSAGE)
+        await callback_query.answer()
+        return
+
+    await message.answer(format_admin_places(category, groups))
     await callback_query.answer()
 
 
@@ -553,6 +617,24 @@ def _may_touch(
     """A super admin's row — their detail, their permissions — is off limits
     to the ordinary rung."""
     return target_id not in super_admin_ids or is_admin(callback_query, super_admin_ids)
+
+
+def _hidden_ids(
+    callback_query: CallbackQuery, super_admin_ids: tuple[int, ...]
+) -> tuple[int, ...]:
+    """What this viewer must not see: the ordinary rung is not shown the super
+    admins — not their rows, not their places, not their counts."""
+    return () if is_admin(callback_query, super_admin_ids) else super_admin_ids
+
+
+def _parse_category(data: str | None, prefix: str) -> PlaceCategory | None:
+    if data is None or not data.startswith(prefix):
+        return None
+
+    try:
+        return PlaceCategory(data[len(prefix) :])
+    except ValueError:
+        return None
 
 
 async def _open_super(

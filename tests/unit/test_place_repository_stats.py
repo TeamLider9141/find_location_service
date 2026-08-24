@@ -99,3 +99,13 @@ def test_admin_delete_removes_a_place_owned_by_someone_else(repository) -> None:
 
 def test_admin_delete_of_a_missing_place_reports_failure(repository) -> None:
     assert repository.delete_any(999) is False
+
+
+def test_excluded_authors_places_are_left_out_of_the_counts(repository) -> None:
+    # The ordinary admin rung is not shown the super admins' contributions.
+    add(repository, name="Газпром", user_id=42)
+    add(repository, name="Лукойл", user_id=99)
+
+    counts = repository.count_by_category(exclude_author_ids=(99,))
+
+    assert counts[PlaceCategory.FUEL] == 1

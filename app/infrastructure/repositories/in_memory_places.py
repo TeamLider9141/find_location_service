@@ -156,9 +156,13 @@ class InMemoryPlaceRepository:
         cutoff = now - timedelta(days=max(days, 0))
         return sum(1 for place in self._places.values() if place.created_at >= cutoff)
 
-    def count_by_category(self) -> dict[PlaceCategory, int]:
+    def count_by_category(
+        self, exclude_author_ids: tuple[int, ...] = ()
+    ) -> dict[PlaceCategory, int]:
         counts: Counter[PlaceCategory] = Counter(
-            place.category for place in self._places.values()
+            place.category
+            for place in self._places.values()
+            if place.added_by_user_id not in exclude_author_ids
         )
         return dict(counts)
 

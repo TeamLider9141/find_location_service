@@ -116,5 +116,33 @@ def test_the_fallback_category_is_offered_last() -> None:
     assert _callback_data(keyboard)[-1] == f"pick:{PlaceCategory.OTHER.value}"
 
 
+def test_category_buttons_show_their_counts() -> None:
+    keyboard = build_category_choice_keyboard(
+        "find:category", counts={PlaceCategory.FUEL: 3}
+    )
+
+    labels = [row[0].text for row in keyboard.inline_keyboard]
+    fuel = next(label for label in labels if "Gas" in label)
+    assert "(3 ta)" in fuel
+
+
+def test_an_empty_category_keeps_its_plain_label() -> None:
+    # "(0 ta)" reads like a shrug; the plain label invites nothing falsely.
+    keyboard = build_category_choice_keyboard(
+        "find:category", counts={PlaceCategory.FUEL: 3}
+    )
+
+    labels = [row[0].text for row in keyboard.inline_keyboard]
+    hotel = next(label for label in labels if "Mehmonxona" in label)
+    assert "ta)" not in hotel
+
+
+def test_without_counts_the_keyboard_is_unchanged() -> None:
+    keyboard = build_category_choice_keyboard("find:category")
+
+    labels = [row[0].text for row in keyboard.inline_keyboard]
+    assert all("ta)" not in label for label in labels)
+
+
 def test_the_fallback_category_is_labelled_in_uzbek() -> None:
     assert category_label(PlaceCategory.OTHER) == "📌 Boshqa kategoriya"

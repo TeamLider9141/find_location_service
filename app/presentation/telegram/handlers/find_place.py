@@ -7,6 +7,7 @@ from aiogram.types import CallbackQuery, Message
 
 from app.application.use_cases.admin import RecordSearchUseCase
 from app.application.use_cases.places import (
+    CountPlacesByCategoryUseCase,
     FindPlacesUseCase,
     GetPlaceUseCase,
     NearbyPlacesUseCase,
@@ -54,10 +55,20 @@ class UserSettingsStore(Protocol):
 
 
 @router.message(F.text == SEARCH_BUTTON)
-async def handle_find_start(message: Message) -> None:
+async def handle_find_start(
+    message: Message, count_places_by_category: CountPlacesByCategoryUseCase
+) -> None:
+    try:
+        counts = count_places_by_category.execute()
+    except sqlite3.Error as error:
+        # The keyboard still works without the numbers; failing the whole
+        # search over a decoration would be backwards.
+        report_service_error(error, "category counts")
+        counts = None
+
     await message.answer(
         ASK_QUERY_MESSAGE,
-        reply_markup=build_category_choice_keyboard("find:category"),
+        reply_markup=build_category_choice_keyboard("find:category", counts),
     )
 
 

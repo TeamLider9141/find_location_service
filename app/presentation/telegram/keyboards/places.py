@@ -1,11 +1,20 @@
+from typing import Mapping
+
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from app.domain.value_objects.category import PlaceCategory
 from app.presentation.telegram.keyboards.categories import category_label
 
 
-def build_category_choice_keyboard(prefix: str) -> InlineKeyboardMarkup:
-    """One button per category, each callback prefixed by the caller's flow."""
+def build_category_choice_keyboard(
+    prefix: str, counts: Mapping[PlaceCategory, int] | None = None
+) -> InlineKeyboardMarkup:
+    """One button per category, each callback prefixed by the caller's flow.
+
+    ``counts`` appends "(N ta)" to each label, so a driver picks a category
+    knowing whether anything waits behind it. Left off where the number would
+    be noise — choosing a category for a new place, say.
+    """
     # Iterating PlaceCategory rather than the label table keeps the keyboard in
     # step with the enum: a category added to the domain shows up here without a
     # second edit. A label table that fell behind is what hid CAFE from the UI
@@ -14,13 +23,22 @@ def build_category_choice_keyboard(prefix: str) -> InlineKeyboardMarkup:
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text=category_label(category),
+                    text=_category_button_label(category, counts),
                     callback_data=f"{prefix}:{category.value}",
                 )
             ]
             for category in PlaceCategory
         ]
     )
+
+
+def _category_button_label(
+    category: PlaceCategory, counts: Mapping[PlaceCategory, int] | None
+) -> str:
+    label = category_label(category)
+    total = (counts or {}).get(category, 0)
+    # An empty category keeps its plain label — "(0 ta)" reads like a shrug.
+    return f"{label} ({total} ta)" if total else label
 
 
 def build_place_results_keyboard(place_ids: list[int]) -> InlineKeyboardMarkup:

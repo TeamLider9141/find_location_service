@@ -8,6 +8,7 @@ from aiogram.fsm.storage.memory import MemoryStorage
 
 from app.application.use_cases.access import DecideAddAccessUseCase, RevokeAddAccessUseCase
 from app.application.use_cases.admin import (
+    AdminPlacesByCategoryUseCase,
     DeletePlaceAsAdminUseCase,
     GetAdminOverviewUseCase,
     GetUserDetailUseCase,
@@ -15,7 +16,7 @@ from app.application.use_cases.admin import (
     ListUsersPageUseCase,
     TopSearchesUseCase,
 )
-from app.application.use_cases.places import AddPlaceUseCase
+from app.application.use_cases.places import AddPlaceUseCase, CountPlacesByCategoryUseCase
 from app.domain.value_objects.category import PlaceCategory
 from app.domain.value_objects.coordinates import Coordinates
 from app.domain.value_objects.add_access import AddAccessStatus
@@ -35,6 +36,8 @@ from app.presentation.telegram.handlers.admin import (
     UNKNOWN_USER_MESSAGE,
     handle_admin_command,
     handle_admin_home,
+    handle_admin_places,
+    handle_admin_places_category,
     handle_allow_add,
     handle_deny_add,
     handle_revoke_add,
@@ -870,3 +873,128 @@ async def test_the_ordinary_rung_cannot_revoke_a_super_admin() -> None:
 
     assert access.status(ADMIN_ID) == AddAccessStatus.APPROVED
     assert callback.alerts == [SUPER_ADMIN_ONLY_MESSAGE]
+
+
+# --- the location browser ---------------------------------------------------
+
+
+async def test_the_menu_offers_the_location_browser() -> None:
+    message = FakeMessage()
+
+    await handle_admin_command(message, admin_ids=ADMIN_IDS)
+
+    keyboard = message.answers[0]["reply_markup"]
+    data = [button.callback_data for row in keyboard.inline_keyboard for button in row]
+    assert "admin:places" in data
+
+
+async def test_the_location_browser_opens_with_counted_categories(places, users) -> None:
+    seed_place(places)
+    callback = FakeCallbackQuery("admin:places")
+
+    await handle_admin_places(
+        callback,
+        admin_ids=ADMIN_IDS,
+        super_admin_ids=ADMIN_IDS,
+        count_places_by_category=CountPlacesByCategoryUseCase(places),
+    )
+
+    keyboard = callback.message.answers[0]["reply_markup"]
+    labels = [row[0].text for row in keyboard.inline_keyboard]
+    assert any("(1 ta)" in label for label in labels)
+    data = [row[0].callback_data for row in keyboard.inline_keyboard]
+    assert "admin:places_cat:fuel" in data
+
+
+async def test_the_ordinary_rungs_counts_leave_the_super_admins_out(places, users) -> None:
+    seed_place(places, user_id=ADMIN_ID)
+    seed_place(places, user_id=7, name="Лукойл")
+    callback = FakeCallbackQuery("admin:places", user_id=ORDINARY_ADMIN_ID)
+
+    await handle_admin_places(
+        callback,
+        admin_ids=BOTH_RUNGS,
+        super_admin_ids=(ADMIN_ID,),
+        count_places_by_category=CountPlacesByCategoryUseCase(places),
+    )
+
+    keyboard = callback.message.answers[0]["reply_markup"]
+    labels = [row[0].text for row in keyboard.inline_keyboard]
+    fuel = next(label for label in labels if "Gas" in label)
+    assert "(1 ta)" in fuel
+
+
+async def test_a_category_lists_places_by_their_authors(places, users) -> None:
+    users.record_seen(7, full_name="Bobur", username=None)
+    seed_place(places, user_id=7)
+    callback = FakeCallbackQuery("admin:places_cat:fuel")
+
+    await handle_admin_places_category(
+        callback,
+        admin_ids=ADMIN_IDS,
+        super_admin_ids=ADMIN_IDS,
+        admin_places_by_category=AdminPlacesByCategoryUseCase(places, users),
+    )
+
+    text = callback.texts[0]
+    assert "Bobur" in text
+    assert "Газпром" in text
+    assert "google.com/maps" in text
+
+
+async def test_the_ordinary_rung_is_not_shown_the_super_admins_places(places, users) -> None:
+    seed_place(places, user_id=ADMIN_ID, name="Superniki")
+    seed_place(places, user_id=7, name="Газпром")
+    callback = FakeCallbackQuery("admin:places_cat:fuel", user_id=ORDINARY_ADMIN_ID)
+
+    await handle_admin_places_category(
+        callback,
+        admin_ids=BOTH_RUNGS,
+        super_admin_ids=(ADMIN_ID,),
+        admin_places_by_category=AdminPlacesByCategoryUseCase(places, users),
+    )
+
+    assert "Газпром" in callback.texts[0]
+    assert "Superniki" not in callback.texts[0]
+
+
+async def test_a_super_admin_is_shown_every_places_author(places, users) -> None:
+    seed_place(places, user_id=ADMIN_ID, name="Superniki")
+    seed_place(places, user_id=7, name="Газпром")
+    callback = FakeCallbackQuery("admin:places_cat:fuel", user_id=ADMIN_ID)
+
+    await handle_admin_places_category(
+        callback,
+        admin_ids=BOTH_RUNGS,
+        super_admin_ids=(ADMIN_ID,),
+        admin_places_by_category=AdminPlacesByCategoryUseCase(places, users),
+    )
+
+    assert "Superniki" in callback.texts[0]
+    assert "Газпром" in callback.texts[0]
+
+
+async def test_a_garbled_category_is_refused(places, users) -> None:
+    callback = FakeCallbackQuery("admin:places_cat:oops")
+
+    await handle_admin_places_category(
+        callback,
+        admin_ids=ADMIN_IDS,
+        super_admin_ids=ADMIN_IDS,
+        admin_places_by_category=AdminPlacesByCategoryUseCase(places, users),
+    )
+
+    assert callback.alerts == [INVALID_SELECTION_MESSAGE]
+
+
+async def test_a_stranger_cannot_browse_locations(places, users) -> None:
+    callback = FakeCallbackQuery("admin:places", user_id=STRANGER_ID)
+
+    await handle_admin_places(
+        callback,
+        admin_ids=ADMIN_IDS,
+        super_admin_ids=ADMIN_IDS,
+        count_places_by_category=CountPlacesByCategoryUseCase(places),
+    )
+
+    assert callback.alerts == [NOT_ADMIN_MESSAGE]

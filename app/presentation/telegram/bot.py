@@ -1,6 +1,7 @@
 from aiogram import Bot, Dispatcher
 
 from app.application.use_cases.admin import (
+    AdminPlacesByCategoryUseCase,
     DeletePlaceAsAdminUseCase,
     GetAdminOverviewUseCase,
     GetUserDetailUseCase,
@@ -12,6 +13,7 @@ from app.application.use_cases.admin import (
 )
 from app.application.use_cases.places import (
     AddPlaceUseCase,
+    CountPlacesByCategoryUseCase,
     DeletePlaceUseCase,
     FindPlacesUseCase,
     GetPlaceUseCase,
@@ -67,6 +69,8 @@ def create_dispatcher(
         top_searches=TopSearchesUseCase(users),
         delete_place_as_admin=DeletePlaceAsAdminUseCase(repository),
         broadcast_recipients=ListBroadcastRecipientsUseCase(users),
+        count_places_by_category=CountPlacesByCategoryUseCase(repository),
+        admin_places_by_category=AdminPlacesByCategoryUseCase(repository, users),
         request_add_access=RequestAddAccessUseCase(add_access),
         decide_add_access=DecideAddAccessUseCase(add_access),
         revoke_add_access=RevokeAddAccessUseCase(add_access),

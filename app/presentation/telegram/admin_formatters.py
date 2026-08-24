@@ -1,13 +1,24 @@
 from datetime import datetime, timedelta, timezone
 
-from app.application.use_cases.admin import AdminOverview, UserDetail, UsersPage
+from app.application.use_cases.admin import (
+    AdminOverview,
+    AuthorPlaces,
+    UserDetail,
+    UsersPage,
+)
 from app.domain.entities.bot_user import BotUser
+from app.domain.value_objects.category import PlaceCategory
 from app.presentation.telegram.formatters import place_map_link
 from app.presentation.telegram.keyboards.categories import category_label
 
 EMPTY_DATABASE_MESSAGE = "Hali hech kim joy qo'shmagan."
 NO_USERS_MESSAGE = "Foydalanuvchilar yo'q."
 NO_SEARCHES_MESSAGE = "Hali qidiruv yo'q."
+NO_PLACES_IN_CATEGORY_MESSAGE = "Bu kategoriyada hali joy yo'q."
+
+# Telegram cuts a message at 4096 characters; a place entry with its link runs
+# about a hundred. The cap keeps the reply well inside the limit.
+PLACES_PREVIEW_LIMIT = 30
 
 
 def format_admin_overview(overview: AdminOverview) -> str:
@@ -85,6 +96,39 @@ def format_user_detail(detail: UserDetail) -> str:
             lines.append(f"   {place_map_link(place)}")
 
     return "\n".join(lines)
+
+
+def format_admin_places(category: PlaceCategory, groups: list[AuthorPlaces]) -> str:
+    """One category's places, numbered by author, each place under its map link."""
+    total = sum(len(group.places) for group in groups)
+    if total == 0:
+        return NO_PLACES_IN_CATEGORY_MESSAGE
+
+    lines = [f"🗺 {category_label(category)} — {total} ta", ""]
+    shown = 0
+    for index, group in enumerate(groups, start=1):
+        if shown >= PLACES_PREVIEW_LIMIT:
+            break
+        user = group.user
+        author = _author_label(
+            user.full_name if user else None,
+            user.username if user else None,
+            group.author_id,
+        )
+        lines.append(f"{index}) {author} — {len(group.places)} ta")
+        for place in group.places:
+            if shown >= PLACES_PREVIEW_LIMIT:
+                break
+            lines.append(f"   📍 {place.name}")
+            lines.append(f"   {place_map_link(place)}")
+            shown += 1
+        lines.append("")
+
+    remaining = total - shown
+    if remaining > 0:
+        lines.append(f"…va yana {remaining} ta joy.")
+
+    return "\n".join(lines).strip()
 
 
 def format_top_searches(rows: list[tuple[str, int]]) -> str:

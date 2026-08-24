@@ -71,8 +71,14 @@ class PlaceRepository(Protocol):
     def count_added_since(self, days: int) -> int:
         """Return how many places were added within the last ``days`` days."""
 
-    def count_by_category(self) -> dict[PlaceCategory, int]:
-        """Return the place count per category. Unused categories are absent."""
+    def count_by_category(
+        self, exclude_author_ids: tuple[int, ...] = ()
+    ) -> dict[PlaceCategory, int]:
+        """Return the place count per category. Unused categories are absent.
+
+        ``exclude_author_ids`` leaves those authors' places out of the count —
+        the ordinary admin rung is not shown the super admins' contributions.
+        """
 
     def top_authors(self, limit: int = 10) -> list[tuple[int, int]]:
         """Return (user id, places added) pairs, biggest contributor first."""

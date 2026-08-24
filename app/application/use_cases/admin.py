@@ -50,6 +50,19 @@ class UserDetail:
     searches: int
 
 
+@dataclass(frozen=True)
+class AuthorPlaces:
+    """One driver's contribution to a category.
+
+    ``user`` is None when tracking never saw the author — a row written before
+    tracking existed, or a database restored from elsewhere.
+    """
+
+    author_id: int
+    user: BotUser | None
+    places: list[Place]
+
+
 class GetAdminOverviewUseCase:
     def __init__(self, places: PlaceRepository, users: UserRepository) -> None:
         self._places = places
@@ -160,6 +173,46 @@ class RecordUserVisitUseCase:
         # one label that always exists, so the panel falls back to it.
         cleaned_name = full_name.strip() or str(user_id)
         return self._users.record_seen(user_id, full_name=cleaned_name, username=username)
+
+
+class AdminPlacesByCategoryUseCase:
+    """Every place in one category, grouped by the driver who added it."""
+
+    # Far above any realistic community size; exists so one enormous category
+    # cannot balloon a single Telegram reply without bound.
+    SEARCH_CEILING = 1000
+
+    def __init__(self, places: PlaceRepository, users: UserRepository) -> None:
+        self._places = places
+        self._users = users
+
+    def execute(
+        self, category: PlaceCategory, exclude_author_ids: tuple[int, ...] = ()
+    ) -> list[AuthorPlaces]:
+        found = self._places.search(category=category, limit=self.SEARCH_CEILING)
+
+        by_author: dict[int, list[Place]] = {}
+        for place in found:
+            if place.added_by_user_id in exclude_author_ids:
+                continue
+            by_author.setdefault(place.added_by_user_id, []).append(place)
+
+        groups = [
+            AuthorPlaces(
+                author_id=author_id,
+                user=self._users.get(author_id),
+                places=sorted(group, key=lambda place: place.name.lower()),
+            )
+            for author_id, group in by_author.items()
+        ]
+        # Ordered by the name the admin will read, so the list scans like a
+        # phone book; authors known only by id sort as their number.
+        return sorted(groups, key=_author_sort_key)
+
+
+def _author_sort_key(group: AuthorPlaces) -> str:
+    name = group.user.full_name if group.user else None
+    return (name or str(group.author_id)).lower()
 
 
 class DeletePlaceAsAdminUseCase:

@@ -1,6 +1,7 @@
 from datetime import datetime
 
 from app.application.use_cases.admin import (
+    AdminPlacesByCategoryUseCase,
     DeletePlaceAsAdminUseCase,
     GetAdminOverviewUseCase,
     GetUserDetailUseCase,
@@ -206,3 +207,46 @@ def test_broadcast_recipients_are_every_known_user() -> None:
     users.record_seen(2, full_name="B", username=None)
 
     assert sorted(ListBroadcastRecipientsUseCase(users).execute()) == [1, 2]
+
+
+def test_places_in_a_category_are_grouped_by_their_author() -> None:
+    places = InMemoryPlaceRepository()
+    users = InMemoryUserRepository()
+    users.record_seen(1, full_name="Bobur", username=None)
+    users.record_seen(2, full_name="Anvar", username="anvar")
+    add_place(places, user_id=1, name="Газпром")
+    add_place(places, user_id=1, name="Лукойл")
+    add_place(places, user_id=2, name="Татнефть")
+
+    groups = AdminPlacesByCategoryUseCase(places, users).execute(PlaceCategory.FUEL)
+
+    # Ordered by the name the admin reads, places alphabetical inside a group.
+    assert [(group.author_id, [place.name for place in group.places]) for group in groups] == [
+        (2, ["Татнефть"]),
+        (1, ["Газпром", "Лукойл"]),
+    ]
+    assert groups[0].user.username == "anvar"
+
+
+def test_an_excluded_authors_places_stay_out_of_the_grouping() -> None:
+    places = InMemoryPlaceRepository()
+    add_place(places, user_id=1, name="Газпром")
+    add_place(places, user_id=99, name="Лукойл")
+
+    groups = AdminPlacesByCategoryUseCase(places, InMemoryUserRepository()).execute(
+        PlaceCategory.FUEL, exclude_author_ids=(99,)
+    )
+
+    assert [group.author_id for group in groups] == [1]
+
+
+def test_an_author_tracking_never_saw_is_grouped_by_id() -> None:
+    places = InMemoryPlaceRepository()
+    add_place(places, user_id=7, name="Газпром")
+
+    groups = AdminPlacesByCategoryUseCase(places, InMemoryUserRepository()).execute(
+        PlaceCategory.FUEL
+    )
+
+    assert groups[0].user is None
+    assert groups[0].author_id == 7

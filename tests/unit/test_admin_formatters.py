@@ -2,6 +2,7 @@ from datetime import datetime
 
 from app.application.use_cases.admin import (
     AdminOverview,
+    AuthorPlaces,
     AuthorRanking,
     UserDetail,
     UserRow,
@@ -13,6 +14,7 @@ from app.domain.value_objects.category import PlaceCategory
 from app.domain.value_objects.coordinates import Coordinates
 from app.presentation.telegram.admin_formatters import (
     format_admin_overview,
+    format_admin_places,
     format_broadcast_preview,
     format_broadcast_result,
     format_top_searches,
@@ -199,3 +201,40 @@ def test_a_broadcast_result_reports_both_outcomes() -> None:
 
     assert "15" in text
     assert "2" in text
+
+
+def test_admin_places_number_the_authors_with_their_links() -> None:
+    groups = [
+        AuthorPlaces(author_id=7, user=make_user(), places=[make_place()]),
+        AuthorPlaces(author_id=9, user=None, places=[make_place(2, "Лукойл")]),
+    ]
+
+    text = format_admin_places(PlaceCategory.FUEL, groups)
+
+    assert "2 ta" in text
+    assert "1) Ali (@ali)" in text
+    assert "📍 Газпром" in text
+    assert "https://www.google.com/maps/search/?api=1&query=55.75,37.61" in text
+    # An author tracking never saw is labelled by id, not dropped.
+    assert "2) 9" in text
+
+
+def test_an_empty_category_says_so() -> None:
+    assert "yo'q" in format_admin_places(PlaceCategory.HOTEL, []).lower()
+
+
+def test_a_huge_category_is_cut_with_a_tail_note() -> None:
+    # Telegram cuts messages at 4096 characters; the formatter cuts first and
+    # says how much it left out.
+    groups = [
+        AuthorPlaces(
+            author_id=7,
+            user=make_user(),
+            places=[make_place(place_id, f"Joy {place_id:03d}") for place_id in range(40)],
+        )
+    ]
+
+    text = format_admin_places(PlaceCategory.FUEL, groups)
+
+    assert text.count("📍") == 30
+    assert "yana 10 ta joy" in text
