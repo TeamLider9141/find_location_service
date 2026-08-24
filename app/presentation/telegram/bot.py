@@ -23,16 +23,18 @@ from app.config.settings import Settings
 from app.domain.interfaces.places import PlaceRepository
 from app.domain.interfaces.users import UserRepository
 from app.infrastructure.database.sqlite_places import SQLitePlaceRepository
+from app.infrastructure.database.sqlite_user_settings import SQLiteUserSettingsStore
 from app.infrastructure.database.sqlite_users import SQLiteUserRepository
 from app.presentation.telegram.handlers import add_place, admin, find_place, my_places, start
 from app.presentation.telegram.handlers import settings as settings_handlers
+from app.presentation.telegram.handlers.settings import UserSettingsStore
 from app.presentation.telegram.middlewares.user_tracking import UserTrackingMiddleware
-from app.presentation.telegram.selection_store import InMemoryUserSettingsStore
 
 
 def create_dispatcher(
     repository: PlaceRepository,
     users: UserRepository,
+    user_settings: UserSettingsStore,
     admin_ids: tuple[int, ...] = (),
 ) -> Dispatcher:
     dispatcher = Dispatcher(
@@ -43,7 +45,7 @@ def create_dispatcher(
         list_my_places=ListMyPlacesUseCase(repository),
         update_place=UpdatePlaceUseCase(repository),
         delete_place=DeletePlaceUseCase(repository),
-        user_settings=InMemoryUserSettingsStore(),
+        user_settings=user_settings,
         record_search=RecordSearchUseCase(users),
         admin_overview=GetAdminOverviewUseCase(repository, users),
         list_users_page=ListUsersPageUseCase(users, repository),
@@ -78,6 +80,12 @@ def create_bot(settings: Settings) -> Bot:
 
 def create_place_repository(settings: Settings) -> PlaceRepository:
     return SQLitePlaceRepository(settings.database_path)
+
+
+def create_user_settings_store(settings: Settings) -> UserSettingsStore:
+    # Same file again. A driver who widened their radius expects it to still be
+    # wide after a deploy, not back at the default nobody chose.
+    return SQLiteUserSettingsStore(settings.database_path)
 
 
 def create_user_repository(settings: Settings) -> UserRepository:

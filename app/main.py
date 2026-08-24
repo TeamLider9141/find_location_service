@@ -8,6 +8,7 @@ from app.presentation.telegram.bot import (
     create_dispatcher,
     create_place_repository,
     create_user_repository,
+    create_user_settings_store,
 )
 from app.presentation.telegram.commands import configure_commands
 from app.shared.logging import configure_logging
@@ -27,6 +28,7 @@ async def run_bot() -> int:
     dispatcher = create_dispatcher(
         create_place_repository(settings),
         users=create_user_repository(settings),
+        user_settings=create_user_settings_store(settings),
         admin_ids=settings.admin_ids,
     )
     try:

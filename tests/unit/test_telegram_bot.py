@@ -6,18 +6,25 @@ from app.config.settings import Settings
 from app.infrastructure.repositories.in_memory_places import InMemoryPlaceRepository
 from app.infrastructure.repositories.in_memory_users import InMemoryUserRepository
 from app.presentation.telegram.bot import create_bot, create_dispatcher
+from app.presentation.telegram.selection_store import InMemoryUserSettingsStore
 
 # The handler routers are module-level singletons, and aiogram refuses to attach
 # one to a second dispatcher. So the whole file shares one dispatcher — which is
 # also how the bot runs: built once at startup.
 REPOSITORY = InMemoryPlaceRepository()
 USERS = InMemoryUserRepository()
+SETTINGS = InMemoryUserSettingsStore()
 ADMIN_IDS = (99,)
 
 
 @pytest.fixture(scope="module")
 def dispatcher() -> Dispatcher:
-    return create_dispatcher(REPOSITORY, users=USERS, admin_ids=ADMIN_IDS)
+    return create_dispatcher(
+        REPOSITORY,
+        users=USERS,
+        user_settings=SETTINGS,
+        admin_ids=ADMIN_IDS,
+    )
 
 
 def test_create_bot_requires_telegram_token() -> None:
@@ -94,3 +101,9 @@ def test_every_visitor_is_recorded_before_a_handler_runs(
     for observer in (dispatcher.message, dispatcher.callback_query):
         names = [type(middleware).__name__ for middleware in observer.outer_middleware]
         assert "UserTrackingMiddleware" in names
+
+
+def test_the_settings_store_survives_a_restart(dispatcher: Dispatcher) -> None:
+    # Handed in rather than built inside: an in-memory store would silently
+    # reset every driver's radius on each deploy.
+    assert dispatcher.workflow_data["user_settings"] is SETTINGS
