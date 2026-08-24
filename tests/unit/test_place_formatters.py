@@ -12,14 +12,14 @@ from app.presentation.telegram.formatters import (
 def make_place(
     place_id: int = 1,
     name: str = "Газпром",
-    category: PlaceCategory = PlaceCategory.FUEL,
+    categories: tuple[PlaceCategory, ...] = (PlaceCategory.FUEL,),
     note: str = "",
 ) -> Place:
     return Place(
         id=place_id,
         added_by_user_id=42,
         name=name,
-        category=category,
+        categories=categories,
         coordinates=Coordinates(latitude=55.75, longitude=37.61),
         note=note,
         created_at=datetime(2026, 1, 1),
@@ -85,8 +85,8 @@ def test_a_name_with_html_in_it_cannot_break_the_message() -> None:
 def test_results_are_numbered_and_show_categories() -> None:
     text = format_place_results(
         [
-            make_place(place_id=1, name="Газпром", category=PlaceCategory.FUEL),
-            make_place(place_id=2, name="Кафе", category=PlaceCategory.CAFE),
+            make_place(place_id=1, name="Газпром", categories=(PlaceCategory.FUEL,)),
+            make_place(place_id=2, name="Кафе", categories=(PlaceCategory.CAFE,)),
         ]
     )
 

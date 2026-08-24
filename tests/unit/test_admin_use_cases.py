@@ -18,13 +18,13 @@ from app.infrastructure.repositories.in_memory_places import InMemoryPlaceReposi
 from app.infrastructure.repositories.in_memory_users import InMemoryUserRepository
 
 
-def add_place(repository, name="Газпром", category=PlaceCategory.FUEL, user_id=42) -> Place:
+def add_place(repository, name="Газпром", categories=(PlaceCategory.FUEL,), user_id=42) -> Place:
     return repository.add(
         Place(
             id=0,
             added_by_user_id=user_id,
             name=name,
-            category=category,
+            categories=categories,
             coordinates=Coordinates(latitude=55.75, longitude=37.61),
             note="",
             created_at=datetime(2026, 1, 1),
@@ -55,8 +55,8 @@ def test_overview_reports_the_recent_windows() -> None:
 
 def test_overview_breaks_places_down_by_category() -> None:
     places = InMemoryPlaceRepository()
-    add_place(places, category=PlaceCategory.FUEL)
-    add_place(places, name="Кафе", category=PlaceCategory.CAFE)
+    add_place(places, categories=(PlaceCategory.FUEL,))
+    add_place(places, name="Кафе", categories=(PlaceCategory.CAFE,))
 
     overview = GetAdminOverviewUseCase(places, InMemoryUserRepository()).execute()
 

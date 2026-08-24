@@ -105,13 +105,13 @@ def seeded_repository() -> InMemoryPlaceRepository:
     add.execute(
         user_id=42,
         name="Газпром",
-        category=PlaceCategory.FUEL,
+        categories=(PlaceCategory.FUEL,),
         coordinates=Coordinates(latitude=55.7510, longitude=37.6100),
     )
     add.execute(
         user_id=7,
         name="Кафе У Дороги",
-        category=PlaceCategory.CAFE,
+        categories=(PlaceCategory.CAFE,),
         coordinates=Coordinates(latitude=55.7700, longitude=37.6100),
     )
     return repository
@@ -231,7 +231,7 @@ async def test_category_browse_honours_the_result_limit() -> None:
     AddPlaceUseCase(repository).execute(
         user_id=7,
         name="Лукойл",
-        category=PlaceCategory.FUEL,
+        categories=(PlaceCategory.FUEL,),
         coordinates=Coordinates(latitude=55.7520, longitude=37.6100),
     )
 

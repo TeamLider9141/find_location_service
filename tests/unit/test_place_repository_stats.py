@@ -19,13 +19,13 @@ def repository(request, tmp_path):
     return SQLitePlaceRepository(tmp_path / "places.sqlite3")
 
 
-def add(repository, name="Газпром", category=PlaceCategory.FUEL, user_id=42) -> Place:
+def add(repository, name="Газпром", categories=(PlaceCategory.FUEL,), user_id=42) -> Place:
     return repository.add(
         Place(
             id=0,
             added_by_user_id=user_id,
             name=name,
-            category=category,
+            categories=categories,
             coordinates=Coordinates(latitude=55.75, longitude=37.61),
             note="",
             created_at=datetime(2026, 1, 1),
@@ -57,9 +57,9 @@ def test_a_zero_day_window_counts_only_today(repository) -> None:
 
 
 def test_category_counts_are_grouped(repository) -> None:
-    add(repository, category=PlaceCategory.FUEL)
-    add(repository, name="Кафе Оазис", category=PlaceCategory.CAFE)
-    add(repository, name="Лукойл", category=PlaceCategory.FUEL)
+    add(repository, categories=(PlaceCategory.FUEL,))
+    add(repository, name="Кафе Оазис", categories=(PlaceCategory.CAFE,))
+    add(repository, name="Лукойл", categories=(PlaceCategory.FUEL,))
 
     counts = repository.count_by_category()
 
@@ -68,7 +68,7 @@ def test_category_counts_are_grouped(repository) -> None:
 
 
 def test_categories_nobody_used_are_absent(repository) -> None:
-    add(repository, category=PlaceCategory.FUEL)
+    add(repository, categories=(PlaceCategory.FUEL,))
 
     assert PlaceCategory.HOTEL not in repository.count_by_category()
 

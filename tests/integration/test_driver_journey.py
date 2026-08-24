@@ -101,6 +101,9 @@ class Journey:
         await handle_category(
             FakeCallbackQuery(f"add_place:category:{category}", user_id=user_id), state
         )
+        await handle_category(
+            FakeCallbackQuery("add_place:category:done", user_id=user_id), state
+        )
         await handle_name(FakeMessage(text=name, user_id=user_id), state)
         await handle_skip_note(FakeMessage(text="/skip", user_id=user_id), state)
 

@@ -66,7 +66,7 @@ def seeded():
     place = AddPlaceUseCase(repository).execute(
         user_id=42,
         name="Газпром",
-        category=PlaceCategory.FUEL,
+        categories=(PlaceCategory.FUEL,),
         coordinates=Coordinates(latitude=55.75, longitude=37.61),
     )
     return repository, place
@@ -77,7 +77,7 @@ async def test_my_places_lists_only_my_contributions() -> None:
     AddPlaceUseCase(repository).execute(
         user_id=7,
         name="Чужое",
-        category=PlaceCategory.CAFE,
+        categories=(PlaceCategory.CAFE,),
         coordinates=Coordinates(latitude=55.76, longitude=37.62),
     )
     message = FakeMessage(user_id=42)
@@ -108,7 +108,7 @@ async def test_my_places_sends_one_card_per_place() -> None:
     AddPlaceUseCase(repository).execute(
         user_id=42,
         name="Лукойл",
-        category=PlaceCategory.FUEL,
+        categories=(PlaceCategory.FUEL,),
         coordinates=Coordinates(latitude=55.76, longitude=37.62),
     )
     message = FakeMessage(user_id=42)
@@ -206,7 +206,7 @@ async def test_set_category_keeps_the_name_and_the_note() -> None:
     place = AddPlaceUseCase(repository).execute(
         user_id=42,
         name="Газпром",
-        category=PlaceCategory.FUEL,
+        categories=(PlaceCategory.FUEL,),
         coordinates=Coordinates(latitude=55.75, longitude=37.61),
         note="M5, 120 км",
     )

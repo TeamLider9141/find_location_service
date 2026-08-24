@@ -11,7 +11,10 @@ from app.application.use_cases.admin import (
 from app.domain.entities.bot_user import BotUser
 from app.domain.value_objects.category import PlaceCategory
 from app.presentation.telegram.formatters import place_map_link
-from app.presentation.telegram.keyboards.categories import category_label
+from app.presentation.telegram.keyboards.categories import (
+    categories_label,
+    category_label,
+)
 
 EMPTY_DATABASE_MESSAGE = "Hali hech kim joy qo'shmagan."
 NO_USERS_MESSAGE = "Foydalanuvchilar yo'q."
@@ -106,7 +109,7 @@ def format_user_detail(detail: UserDetail) -> str:
             name = html.escape(place.name)
             lines.append(
                 f'{index}) <a href="{place_map_link(place)}">{name}</a>'
-                f" ({category_label(place.category)})"
+                f" ({categories_label(place.categories)})"
             )
             # Names arrive with their own newlines inside; without a separator
             # the entries read as one solid block.
@@ -174,7 +177,9 @@ def format_deletion_log(rows: list[DeletionRow]) -> str:
         deleter = _label_or_id(row.deleted_by, record.deleted_by_user_id)
         author = _label_or_id(row.added_by, record.added_by_user_id)
         lines.append(f"{index}) {_format_stamp(record.deleted_at)} — {source}")
-        lines.append(f'   📍 <a href="{link}">{name}</a> ({category_label(record.category)})')
+        lines.append(
+            f'   📍 <a href="{link}">{name}</a> ({categories_label(record.categories)})'
+        )
         lines.append(f"   O'chirgan: {html.escape(deleter)}")
         lines.append(f"   Qo'shgan edi: {html.escape(author)}")
         lines.append("")

@@ -4,7 +4,10 @@ from app.domain.entities.place import Place
 from app.domain.value_objects.category import PlaceCategory
 from app.domain.value_objects.coordinates import Coordinates
 from app.domain.value_objects.user_settings import UserSettings
-from app.presentation.telegram.keyboards.categories import category_label
+from app.presentation.telegram.keyboards.categories import (
+    categories_label,
+    category_label,
+)
 
 
 def format_start_message() -> str:
@@ -43,7 +46,7 @@ def place_map_link(place: Place) -> str:
 def format_place_card(place: Place) -> str:
     return format_place_preview(
         name=place.name,
-        category=place.category,
+        categories=place.categories,
         coordinates=place.coordinates,
         note=place.note,
     )
@@ -51,7 +54,7 @@ def format_place_card(place: Place) -> str:
 
 def format_place_preview(
     name: str,
-    category: PlaceCategory,
+    categories: tuple[PlaceCategory, ...],
     coordinates: Coordinates,
     note: str,
 ) -> str:
@@ -65,7 +68,7 @@ def format_place_preview(
 
     return (
         f"📍 {name}\n"
-        f"{category_label(category)}\n"
+        f"{categories_label(categories)}\n"
         f"{note_line}"
         f"\n{coordinates.latitude}, {coordinates.longitude}\n"
         f"{link}"
@@ -88,7 +91,7 @@ def format_place_results(
         # beats hunting a raw URL under it.
         name = html.escape(place.name)
         lines.append(f'{index}. <a href="{place_map_link(place)}">{name}</a>')
-        lines.append(f"   {category_label(place.category)}")
+        lines.append(f"   {categories_label(place.categories)}")
         # nearby() supplies one distance per place; search() supplies none. A
         # short list is still safe to render — the places past its end simply
         # have no distance line.
@@ -110,7 +113,7 @@ def _format_distance(meters: float) -> str:
 
 def format_duplicate_warning(duplicates: list[Place]) -> str:
     names = "\n".join(
-        f"• {place.name} — {category_label(place.category)}" for place in duplicates
+        f"• {place.name} — {categories_label(place.categories)}" for place in duplicates
     )
     return (
         "⚠️ Yaqin atrofda shunga o'xshash joy bor:\n\n"

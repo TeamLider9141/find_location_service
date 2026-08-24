@@ -9,7 +9,11 @@ from sqlite3 import Row
 from app.application.name_normalization import normalize_name
 from app.domain.entities.place import Place
 from app.domain.interfaces.places import DEFAULT_DUPLICATE_RADIUS_METERS
-from app.domain.value_objects.category import PlaceCategory
+from app.domain.value_objects.category import (
+    PlaceCategory,
+    join_categories,
+    split_categories,
+)
 from app.domain.value_objects.coordinates import Coordinates
 
 _COLUMNS = """
@@ -40,7 +44,7 @@ class SQLitePlaceRepository:
                     place.added_by_user_id,
                     place.name,
                     normalize_name(place.name),
-                    place.category.value,
+                    join_categories(place.categories),
                     place.coordinates.latitude,
                     place.coordinates.longitude,
                     place.note,
@@ -78,8 +82,8 @@ class SQLitePlaceRepository:
             parameters.append(f"%{_escape_like(normalized_name)}%")
 
         if category is not None:
-            conditions.append("category = ?")
-            parameters.append(category.value)
+            conditions.append("(',' || category || ',') LIKE ?")
+            parameters.append(f"%,{category.value},%")
 
         where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
         parameters.append(limit)
@@ -112,8 +116,8 @@ class SQLitePlaceRepository:
         ]
 
         if category is not None:
-            conditions.append("category = ?")
-            parameters.append(category.value)
+            conditions.append("(',' || category || ',') LIKE ?")
+            parameters.append(f"%,{category.value},%")
 
         with closing(self._connect()) as connection:
             rows = connection.execute(
@@ -179,7 +183,7 @@ class SQLitePlaceRepository:
 
         if category is not None:
             assignments.append("category = ?")
-            parameters.append(category.value)
+            parameters.append(join_categories((category,)))
 
         if note is not None:
             assignments.append("note = ?")
@@ -246,15 +250,21 @@ class SQLitePlaceRepository:
     def count_by_category(
         self, exclude_author_ids: tuple[int, ...] = ()
     ) -> dict[PlaceCategory, int]:
+        # The column holds a comma list, so the splitting happens here rather
+        # than in a GROUP BY — a multi-category place counts once per category.
         placeholders = ",".join("?" * len(exclude_author_ids))
         where = f"WHERE added_by_user_id NOT IN ({placeholders})" if exclude_author_ids else ""
         with closing(self._connect()) as connection:
             rows = connection.execute(
-                f"SELECT category, COUNT(*) AS total FROM places {where} GROUP BY category",
+                f"SELECT category FROM places {where}",
                 exclude_author_ids,
             ).fetchall()
 
-        return {PlaceCategory(str(row["category"])): int(row["total"]) for row in rows}
+        counts: dict[PlaceCategory, int] = {}
+        for row in rows:
+            for category in split_categories(str(row["category"])):
+                counts[category] = counts.get(category, 0) + 1
+        return counts
 
     def top_authors(self, limit: int = 10) -> list[tuple[int, int]]:
         with closing(self._connect()) as connection:
@@ -382,7 +392,7 @@ def _map_row(row: Row) -> Place:
         id=int(row["id"]),
         added_by_user_id=int(row["added_by_user_id"]),
         name=str(row["name"]),
-        category=PlaceCategory(str(row["category"])),
+        categories=split_categories(str(row["category"])),
         coordinates=Coordinates(
             latitude=float(row["latitude"]),
             longitude=float(row["longitude"]),

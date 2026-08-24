@@ -37,7 +37,7 @@ def test_add_place_stores_the_contribution() -> None:
     place = use_case.execute(
         user_id=42,
         name="Газпром",
-        category=PlaceCategory.FUEL,
+        categories=(PlaceCategory.FUEL,),
         coordinates=Coordinates(latitude=55.75, longitude=37.61),
         note="M5, 120 км",
     )
@@ -57,7 +57,7 @@ def test_add_place_defaults_the_note_to_empty() -> None:
     place = use_case.execute(
         user_id=42,
         name="Газпром",
-        category=PlaceCategory.FUEL,
+        categories=(PlaceCategory.FUEL,),
         coordinates=Coordinates(latitude=55.75, longitude=37.61),
     )
 
@@ -71,7 +71,7 @@ def test_add_place_rejects_a_blank_name() -> None:
         use_case.execute(
             user_id=42,
             name="   ",
-            category=PlaceCategory.FUEL,
+            categories=(PlaceCategory.FUEL,),
             coordinates=Coordinates(latitude=55.75, longitude=37.61),
         )
 
@@ -94,14 +94,14 @@ def test_add_place_finds_duplicates_within_the_default_radius_but_not_beyond_it(
     use_case.execute(
         user_id=42,
         name="Газпром",
-        category=PlaceCategory.FUEL,
+        categories=(PlaceCategory.FUEL,),
         coordinates=near_point,
         note="near",
     )
     use_case.execute(
         user_id=42,
         name="Газпром",
-        category=PlaceCategory.FUEL,
+        categories=(PlaceCategory.FUEL,),
         coordinates=far_point,
         note="far",
     )
@@ -117,13 +117,13 @@ def test_find_places_matches_name_or_category() -> None:
     add.execute(
         user_id=42,
         name="Газпром",
-        category=PlaceCategory.FUEL,
+        categories=(PlaceCategory.FUEL,),
         coordinates=Coordinates(latitude=55.75, longitude=37.61),
     )
     add.execute(
         user_id=42,
         name="Придорожное",
-        category=PlaceCategory.RESTAURANT,
+        categories=(PlaceCategory.RESTAURANT,),
         coordinates=Coordinates(latitude=55.76, longitude=37.62),
     )
     use_case = FindPlacesUseCase(repository)
@@ -146,7 +146,7 @@ def test_find_places_default_limit_is_ten() -> None:
         add.execute(
             user_id=42,
             name=f"АЗС {index:02d}",
-            category=PlaceCategory.FUEL,
+            categories=(PlaceCategory.FUEL,),
             coordinates=Coordinates(latitude=55.75, longitude=37.61),
         )
     use_case = FindPlacesUseCase(repository)
@@ -164,13 +164,13 @@ def test_nearby_places_returns_closest_first() -> None:
     add.execute(
         user_id=42,
         name="Дальше",
-        category=PlaceCategory.FUEL,
+        categories=(PlaceCategory.FUEL,),
         coordinates=Coordinates(latitude=55.7700, longitude=37.6100),
     )
     add.execute(
         user_id=42,
         name="Ближе",
-        category=PlaceCategory.FUEL,
+        categories=(PlaceCategory.FUEL,),
         coordinates=Coordinates(latitude=55.7510, longitude=37.6100),
     )
     use_case = NearbyPlacesUseCase(repository)
@@ -195,7 +195,7 @@ def test_nearby_places_default_limit_is_ten() -> None:
         add.execute(
             user_id=42,
             name=f"АЗС {index:02d}",
-            category=PlaceCategory.FUEL,
+            categories=(PlaceCategory.FUEL,),
             coordinates=_north_by_meters(query_point, 100 * (index + 1)),
             note=str(index),
         )
@@ -214,13 +214,13 @@ def test_nearby_places_filters_by_category() -> None:
     add.execute(
         user_id=42,
         name="АЗС",
-        category=PlaceCategory.FUEL,
+        categories=(PlaceCategory.FUEL,),
         coordinates=Coordinates(latitude=55.7510, longitude=37.6100),
     )
     add.execute(
         user_id=42,
         name="Кафе",
-        category=PlaceCategory.CAFE,
+        categories=(PlaceCategory.CAFE,),
         coordinates=Coordinates(latitude=55.7505, longitude=37.6100),
     )
     use_case = NearbyPlacesUseCase(repository)
@@ -244,7 +244,7 @@ def test_add_place_trims_the_note() -> None:
     place = use_case.execute(
         user_id=42,
         name="Газпром",
-        category=PlaceCategory.FUEL,
+        categories=(PlaceCategory.FUEL,),
         coordinates=Coordinates(latitude=55.75, longitude=37.61),
         note="  M5, 120 км  ",
     )
@@ -261,7 +261,7 @@ def test_add_place_trims_the_name_before_storing_it() -> None:
     place = use_case.execute(
         user_id=42,
         name="  Газпром  ",
-        category=PlaceCategory.FUEL,
+        categories=(PlaceCategory.FUEL,),
         coordinates=Coordinates(latitude=55.75, longitude=37.61),
     )
 
@@ -272,7 +272,7 @@ def _seed(repository: InMemoryPlaceRepository, user_id: int = 42) -> Place:
     return AddPlaceUseCase(repository).execute(
         user_id=user_id,
         name="Газпром",
-        category=PlaceCategory.FUEL,
+        categories=(PlaceCategory.FUEL,),
         coordinates=Coordinates(latitude=55.75, longitude=37.61),
         note="кругл",
     )

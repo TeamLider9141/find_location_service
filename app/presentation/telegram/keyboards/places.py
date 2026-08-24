@@ -73,6 +73,58 @@ def build_border_choice_keyboard(
     )
 
 
+# The add flow picks several categories at once — a roadside complex is a fuel
+# station, a canteen and a parking lot at the same time.
+DONE_VALUE = "done"
+DONE_LABEL = "➡️ Davom etish"
+CHOOSE_AT_LEAST_ONE_MESSAGE = "Kamida bitta kategoriya tanlang."
+
+
+def build_category_toggle_keyboard(
+    prefix: str, selected: tuple[PlaceCategory, ...]
+) -> InlineKeyboardMarkup:
+    """The multi-select variant: each tap toggles, "Davom etish" moves on."""
+    rows = []
+    for category in PlaceCategory:
+        if category in BORDER_CATEGORIES:
+            continue
+        if category is PlaceCategory.OTHER:
+            border_mark = "✅ " if any(c in selected for c in BORDER_CATEGORIES) else ""
+            rows.append(
+                [
+                    InlineKeyboardButton(
+                        text=f"{border_mark}{BORDER_GROUP_LABEL}",
+                        callback_data=f"{prefix}:{BORDER_GROUP_VALUE}",
+                    )
+                ]
+            )
+        rows.append([_toggle_button(prefix, category, selected)])
+    rows.append(
+        [InlineKeyboardButton(text=DONE_LABEL, callback_data=f"{prefix}:{DONE_VALUE}")]
+    )
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def build_border_toggle_keyboard(
+    prefix: str, selected: tuple[PlaceCategory, ...]
+) -> InlineKeyboardMarkup:
+    rows = [[_toggle_button(prefix, category, selected)] for category in BORDER_CATEGORIES]
+    rows.append(
+        [InlineKeyboardButton(text=DONE_LABEL, callback_data=f"{prefix}:{DONE_VALUE}")]
+    )
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def _toggle_button(
+    prefix: str, category: PlaceCategory, selected: tuple[PlaceCategory, ...]
+) -> InlineKeyboardButton:
+    mark = "✅ " if category in selected else ""
+    return InlineKeyboardButton(
+        text=f"{mark}{category_label(category)}",
+        callback_data=f"{prefix}:{category.value}",
+    )
+
+
 def _border_group_label(counts: Mapping[PlaceCategory, int] | None) -> str:
     total = sum((counts or {}).get(category, 0) for category in BORDER_CATEGORIES)
     return f"{BORDER_GROUP_LABEL} ({total} ta)" if total else BORDER_GROUP_LABEL

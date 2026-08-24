@@ -11,12 +11,21 @@ class Place:
 
     ``added_by_user_id`` is not an ownership fence for reading — anyone can look a
     place up. It only decides who may edit or delete it.
+
+    A place holds one or more categories: a roadside complex is a fuel station,
+    a canteen and a parking lot at once, and filing it under one of them hides
+    it from everyone searching the other two.
     """
 
     id: int
     added_by_user_id: int
     name: str
-    category: PlaceCategory
+    categories: tuple[PlaceCategory, ...]
     coordinates: Coordinates
     note: str
     created_at: datetime
+
+    @property
+    def category(self) -> PlaceCategory:
+        """The first category — for the single-category views and old callers."""
+        return self.categories[0]

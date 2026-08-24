@@ -18,7 +18,7 @@ def make_row(
         record=DeletionRecord(
             id=1,
             place_name=name,
-            category=PlaceCategory.FUEL,
+            categories=(PlaceCategory.FUEL,),
             latitude=55.75,
             longitude=37.61,
             note="",

@@ -15,7 +15,7 @@ def repository(tmp_path) -> SQLitePlaceRepository:
 
 def make_place(
     name: str = "Газпром",
-    category: PlaceCategory = PlaceCategory.FUEL,
+    categories: tuple[PlaceCategory, ...] = (PlaceCategory.FUEL,),
     latitude: float = 55.75,
     longitude: float = 37.61,
     user_id: int = 42,
@@ -25,7 +25,7 @@ def make_place(
         id=0,
         added_by_user_id=user_id,
         name=name,
-        category=category,
+        categories=categories,
         coordinates=Coordinates(latitude=latitude, longitude=longitude),
         note=note,
         created_at=datetime(2026, 1, 1),
@@ -62,8 +62,8 @@ def test_get_returns_none_for_unknown_id(repository: SQLitePlaceRepository) -> N
 def test_search_by_category_returns_only_that_category(
     repository: SQLitePlaceRepository,
 ) -> None:
-    repository.add(make_place(name="Газпром", category=PlaceCategory.FUEL))
-    repository.add(make_place(name="Придорожное", category=PlaceCategory.RESTAURANT))
+    repository.add(make_place(name="Газпром", categories=(PlaceCategory.FUEL,)))
+    repository.add(make_place(name="Придорожное", categories=(PlaceCategory.RESTAURANT,)))
 
     results = repository.search(category=PlaceCategory.FUEL)
 
@@ -108,8 +108,8 @@ def test_search_by_latin_name_finds_a_cyrillic_record(
 def test_search_by_name_and_category_applies_both(
     repository: SQLitePlaceRepository,
 ) -> None:
-    repository.add(make_place(name="Газпром", category=PlaceCategory.FUEL))
-    repository.add(make_place(name="Газпром кафе", category=PlaceCategory.CAFE))
+    repository.add(make_place(name="Газпром", categories=(PlaceCategory.FUEL,)))
+    repository.add(make_place(name="Газпром кафе", categories=(PlaceCategory.CAFE,)))
 
     results = repository.search(name="газпром", category=PlaceCategory.CAFE)
 
@@ -154,10 +154,10 @@ def test_nearby_sorts_by_distance(repository: SQLitePlaceRepository) -> None:
 
 def test_nearby_can_filter_by_category(repository: SQLitePlaceRepository) -> None:
     repository.add(
-        make_place(name="Заправка", latitude=55.7510, category=PlaceCategory.FUEL)
+        make_place(name="Заправка", latitude=55.7510, categories=(PlaceCategory.FUEL,))
     )
     repository.add(
-        make_place(name="Кафе", latitude=55.7511, category=PlaceCategory.CAFE)
+        make_place(name="Кафе", latitude=55.7511, categories=(PlaceCategory.CAFE,))
     )
 
     results = repository.nearby(
@@ -376,7 +376,7 @@ def test_update_changes_the_name_and_its_search_key(
 
 
 def test_update_changes_the_category(repository: SQLitePlaceRepository) -> None:
-    stored = repository.add(make_place(category=PlaceCategory.FUEL, user_id=42))
+    stored = repository.add(make_place(categories=(PlaceCategory.FUEL,), user_id=42))
 
     updated = repository.update(stored.id, user_id=42, category=PlaceCategory.CAFE)
 

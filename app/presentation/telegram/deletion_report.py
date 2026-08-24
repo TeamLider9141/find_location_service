@@ -12,7 +12,7 @@ from datetime import datetime, timedelta, timezone
 
 from app.application.use_cases.admin import DeletionRow
 from app.presentation.telegram.admin_formatters import DELETION_SOURCE_LABELS
-from app.presentation.telegram.keyboards.categories import category_label
+from app.presentation.telegram.keyboards.categories import categories_label
 
 REPORT_FILENAME = "ochirishlar_jurnali.html"
 
@@ -86,7 +86,7 @@ def _render_row(index: int, row: DeletionRow) -> str:
         stamp=stamp,
         link=html.escape(link, quote=True),
         name=html.escape(record.place_name),
-        category=html.escape(category_label(record.category)),
+        category=html.escape(categories_label(record.categories)),
         note=html.escape(record.note) or "—",
         author=html.escape(_named(row.added_by, record.added_by_user_id)),
         deleter=html.escape(_named(row.deleted_by, record.deleted_by_user_id)),

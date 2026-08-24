@@ -22,7 +22,7 @@ class InMemoryPlaceRepository:
         # guard: None must raise, not pass through. Read .value directly, the
         # same attribute access the real INSERT performs, so a raw string or a
         # None both raise AttributeError before anything is stored.
-        _ = place.category.value
+        _ = [category.value for category in place.categories]
 
         # The real repository leaves created_at out of its INSERT, so the column
         # takes CURRENT_TIMESTAMP and whatever the caller passed is discarded.
@@ -54,7 +54,10 @@ class InMemoryPlaceRepository:
             place
             for place in self._places.values()
             if (not normalized_name or normalized_name in normalize_name(place.name))
-            and (category_value is None or place.category.value == category_value)
+            and (
+                category_value is None
+                or category_value in (c.value for c in place.categories)
+            )
         ]
         matches.sort(key=lambda place: place.name)
         # SQLite reads a negative LIMIT as "no limit", and a double that quietly
@@ -72,7 +75,8 @@ class InMemoryPlaceRepository:
         with_distance = [
             (coordinates.distance_to(place.coordinates), place)
             for place in self._places.values()
-            if category_value is None or place.category.value == category_value
+            if category_value is None
+            or category_value in (c.value for c in place.categories)
         ]
         within = [item for item in with_distance if item[0] <= radius_meters]
         within.sort(key=lambda item: item[0])
@@ -128,7 +132,7 @@ class InMemoryPlaceRepository:
         updated = replace(
             place,
             name=place.name if name is None else name,
-            category=place.category if category is None else category,
+            categories=place.categories if category is None else (category,),
             note=place.note if note is None else note,
         )
         self._places[place_id] = updated
@@ -160,9 +164,10 @@ class InMemoryPlaceRepository:
         self, exclude_author_ids: tuple[int, ...] = ()
     ) -> dict[PlaceCategory, int]:
         counts: Counter[PlaceCategory] = Counter(
-            place.category
+            category
             for place in self._places.values()
             if place.added_by_user_id not in exclude_author_ids
+            for category in place.categories
         )
         return dict(counts)
 

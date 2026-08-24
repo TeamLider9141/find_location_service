@@ -6,7 +6,7 @@ from sqlite3 import Row
 
 from app.domain.entities.deletion_record import DeletionRecord
 from app.domain.entities.place import Place
-from app.domain.value_objects.category import PlaceCategory
+from app.domain.value_objects.category import join_categories, split_categories
 
 
 class SQLiteDeletionLog:
@@ -29,7 +29,7 @@ class SQLiteDeletionLog:
                 """,
                 (
                     place.name,
-                    place.category.value,
+                    join_categories(place.categories),
                     place.coordinates.latitude,
                     place.coordinates.longitude,
                     place.note,
@@ -85,7 +85,7 @@ def _map_record(row: Row) -> DeletionRecord:
     return DeletionRecord(
         id=int(row["id"]),
         place_name=str(row["place_name"]),
-        category=PlaceCategory(str(row["category"])),
+        categories=split_categories(str(row["category"])),
         latitude=float(row["latitude"]),
         longitude=float(row["longitude"]),
         note=str(row["note"]),

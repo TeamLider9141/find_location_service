@@ -29,9 +29,13 @@ class FakeMessage:
         self.text = text
         self.from_user = FakeUser(user_id)
         self.answers: list[dict[str, object]] = []
+        self.markup_edits: list[object] = []
 
     async def answer(self, text: str, **kwargs: object) -> None:
         self.answers.append({"text": text, **kwargs})
+
+    async def edit_reply_markup(self, reply_markup: object = None, **_: object) -> None:
+        self.markup_edits.append(reply_markup)
 
 
 class FakeLocation:

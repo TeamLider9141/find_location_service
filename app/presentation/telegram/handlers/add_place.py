@@ -22,15 +22,19 @@ from app.presentation.telegram.formatters import (
     format_place_card,
     format_place_preview,
 )
+from aiogram.exceptions import TelegramAPIError
 from app.presentation.telegram.keyboards.menu import (
     ADD_PLACE_BUTTON,
     build_main_menu_keyboard,
 )
 from app.presentation.telegram.keyboards.places import (
+    BORDER_CATEGORIES,
     BORDER_GROUP_VALUE,
+    CHOOSE_AT_LEAST_ONE_MESSAGE,
     CHOOSE_BORDER_MESSAGE,
-    build_border_choice_keyboard,
-    build_category_choice_keyboard,
+    DONE_VALUE,
+    build_border_toggle_keyboard,
+    build_category_toggle_keyboard,
     build_duplicate_confirmation_keyboard,
     build_preview_keyboard,
 )
@@ -51,7 +55,10 @@ ASK_LOCATION_AGAIN_MESSAGE = (
     "Buni lokatsiya sifatida o'qiy olmadim. "
     "Telegram lokatsiyasini yuboring yoki koordinatani yozing: 55.75, 37.61"
 )
-ASK_CATEGORY_MESSAGE = "Kategoriyani tanlang."
+ASK_CATEGORY_MESSAGE = (
+    "Kategoriyalarni tanlang — bir nechtasini belgilash mumkin.\n"
+    "Bo'lgach ➡️ Davom etish tugmasini bosing."
+)
 ASK_NAME_MESSAGE = "Joy nomini yozing. Masalan: Газпром yoki Кафе У Дороги."
 BLANK_NAME_MESSAGE = "Nom bo'sh bo'lmasligi kerak. Joy nomini yozing."
 ASK_NOTE_MESSAGE = (
@@ -145,28 +152,50 @@ async def handle_location(message: Message, state: FSMContext) -> None:
     await state.update_data(
         latitude=coordinates.latitude,
         longitude=coordinates.longitude,
+        categories=[],
     )
     await state.set_state(AddPlace.category)
     await message.answer(
         ASK_CATEGORY_MESSAGE,
-        reply_markup=build_category_choice_keyboard("add_place:category"),
+        reply_markup=build_category_toggle_keyboard("add_place:category", ()),
     )
 
 
 @router.callback_query(AddPlace.category, F.data.startswith("add_place:category:"))
 async def handle_category(callback_query: CallbackQuery, state: FSMContext) -> None:
+    """The multi-select step: taps toggle, "Davom etish" moves the flow on."""
     message = answerable_message(callback_query)
     if message is None:
         await callback_query.answer(EXPIRED_MESSAGE)
         return
 
+    data = await state.get_data()
+    selected = _selected_categories(data)
+
     # The borders hide behind one button; tapping it opens them and the state
-    # stays right here, waiting for the real choice.
+    # stays right here, waiting for the real choices.
     if callback_query.data == f"add_place:category:{BORDER_GROUP_VALUE}":
         await message.answer(
             CHOOSE_BORDER_MESSAGE,
-            reply_markup=build_border_choice_keyboard("add_place:category"),
+            reply_markup=build_border_toggle_keyboard("add_place:category", selected),
         )
+        await callback_query.answer()
+        return
+
+    if callback_query.data == f"add_place:category:{DONE_VALUE}":
+        if not selected:
+            await callback_query.answer(CHOOSE_AT_LEAST_ONE_MESSAGE, show_alert=True)
+            return
+
+        # Two roads lead here: the flow's own category step, and the preview's
+        # "change category" button. The second returns to the preview — the
+        # driver was already done writing.
+        if data.get("editing_category"):
+            await state.update_data(editing_category=False)
+            await _show_preview(message, state)
+        else:
+            await state.set_state(AddPlace.name)
+            await message.answer(ASK_NAME_MESSAGE)
         await callback_query.answer()
         return
 
@@ -175,20 +204,37 @@ async def handle_category(callback_query: CallbackQuery, state: FSMContext) -> N
         await callback_query.answer(INVALID_CATEGORY_MESSAGE)
         return
 
-    await state.update_data(category=category.value)
-
-    # Two roads lead here: the flow's own category step, and the preview's
-    # "change category" button. The second returns to the preview — the driver
-    # was already done writing.
-    data = await state.get_data()
-    if data.get("editing_category"):
-        await state.update_data(editing_category=False)
-        await _show_preview(message, state)
+    # Toggle, keeping the order the driver picked in.
+    if category in selected:
+        selected = tuple(c for c in selected if c is not category)
     else:
-        await state.set_state(AddPlace.name)
-        await message.answer(ASK_NAME_MESSAGE)
+        selected = (*selected, category)
+    await state.update_data(categories=[c.value for c in selected])
+
+    # Redraw in place: fifty toggle taps must not leave fifty keyboards behind.
+    rebuild = (
+        build_border_toggle_keyboard
+        if category in BORDER_CATEGORIES
+        else build_category_toggle_keyboard
+    )
+    try:
+        await message.edit_reply_markup(
+            reply_markup=rebuild("add_place:category", selected)
+        )
+    except TelegramAPIError as error:
+        report_service_error(error, "category toggle redraw")
 
     await callback_query.answer()
+
+
+def _selected_categories(data: dict) -> tuple[PlaceCategory, ...]:
+    selected = []
+    for raw in data.get("categories", []):
+        try:
+            selected.append(PlaceCategory(str(raw)))
+        except ValueError:
+            continue
+    return tuple(selected)
 
 
 @router.message(AddPlace.name, F.text)
@@ -219,9 +265,12 @@ async def _show_preview(message: Message, state: FSMContext) -> None:
     """Show the place exactly as everyone will see it, before it is written."""
     data = await state.get_data()
     try:
+        categories = _selected_categories(data)
+        if not categories:
+            raise ValueError("no categories selected")
         preview = format_place_preview(
             name=str(data["name"]),
-            category=PlaceCategory(str(data["category"])),
+            categories=categories,
             coordinates=Coordinates(
                 latitude=float(data["latitude"]),
                 longitude=float(data["longitude"]),
@@ -255,9 +304,12 @@ async def handle_preview_change_category(
 
     await state.update_data(editing_category=True)
     await state.set_state(AddPlace.category)
+    data = await state.get_data()
     await message.answer(
         ASK_CATEGORY_MESSAGE,
-        reply_markup=build_category_choice_keyboard("add_place:category"),
+        reply_markup=build_category_toggle_keyboard(
+            "add_place:category", _selected_categories(data)
+        ),
     )
     await callback_query.answer()
 
@@ -353,7 +405,7 @@ async def _save(
         place = add_place.execute(
             user_id=user_id,
             name=str(data["name"]),
-            category=PlaceCategory(str(data["category"])),
+            categories=_selected_categories(data),
             coordinates=Coordinates(
                 latitude=float(data["latitude"]),
                 longitude=float(data["longitude"]),

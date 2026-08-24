@@ -21,7 +21,7 @@ def make_place(name: str = "Газпром", user_id: int = 42) -> Place:
         id=0,
         added_by_user_id=user_id,
         name=name,
-        category=PlaceCategory.FUEL,
+        categories=(PlaceCategory.FUEL,),
         coordinates=Coordinates(latitude=55.75, longitude=37.61),
         note="",
         created_at=datetime(2026, 1, 1),

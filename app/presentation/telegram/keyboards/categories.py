@@ -16,3 +16,8 @@ CATEGORY_LABELS: dict[PlaceCategory, str] = {
 
 def category_label(category: PlaceCategory) -> str:
     return CATEGORY_LABELS.get(category, category.value)
+
+
+def categories_label(categories: tuple[PlaceCategory, ...]) -> str:
+    """Every hat the place wears, on one line."""
+    return " · ".join(category_label(category) for category in categories)

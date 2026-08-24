@@ -39,9 +39,13 @@ class FakeMessage:
         self.text = text
         self.from_user = FakeUser(user_id)
         self.answers: list[dict[str, object]] = []
+        self.markup_edits: list[object] = []
 
     async def answer(self, text: str, **kwargs: object) -> None:
         self.answers.append({"text": text, **kwargs})
+
+    async def edit_reply_markup(self, reply_markup: object = None, **_: object) -> None:
+        self.markup_edits.append(reply_markup)
 
 
 class FakeBot:
@@ -127,7 +131,7 @@ async def state_with(state_value, **data) -> FSMContext:
 FULL_DATA = dict(
     latitude=55.75,
     longitude=37.61,
-    category=PlaceCategory.FUEL.value,
+    categories=[PlaceCategory.FUEL.value],
     name="Газпром",
     note="",
 )
@@ -247,7 +251,7 @@ async def test_location_step_stores_coordinates_and_asks_for_a_category() -> Non
     assert "add_place:category:fuel" in callback_data
 
 
-async def test_the_category_keyboard_offers_every_category() -> None:
+async def test_the_category_keyboard_offers_every_category_and_a_done_button() -> None:
     # The prefix has to match what the category handler listens for, and no
     # category may be missing from the keyboard the driver actually sees.
     state = await state_with(AddPlace.location)
@@ -264,6 +268,7 @@ async def test_the_category_keyboard_offers_every_category() -> None:
         if category is PlaceCategory.OTHER:
             expected.append(f"add_place:category:{BORDER_GROUP_VALUE}")
         expected.append(f"add_place:category:{category.value}")
+    expected.append("add_place:category:done")
     assert callback_data == expected
 
 
@@ -297,16 +302,64 @@ async def test_location_step_rejects_text_that_is_not_a_location() -> None:
     assert "latitude" not in await state.get_data()
 
 
-async def test_category_step_stores_the_choice_and_asks_for_a_name() -> None:
+async def test_a_tap_toggles_the_category_in_place() -> None:
+    # Several categories at once: a roadside complex is a fuel station and a
+    # canteen at the same time. Taps toggle; the message is redrawn, not
+    # re-sent, so fifty taps do not leave fifty keyboards behind.
     state = await state_with(AddPlace.category, latitude=55.75, longitude=37.61)
     callback = FakeCallbackQuery("add_place:category:fuel")
 
     await handle_category(callback, state)
 
-    assert (await state.get_data())["category"] == PlaceCategory.FUEL.value
+    assert (await state.get_data())["categories"] == ["fuel"]
+    assert await state.get_state() == AddPlace.category.state
+    assert len(callback.message.markup_edits) == 1
+    labels = [row[0].text for row in callback.message.markup_edits[0].inline_keyboard]
+    assert any(label.startswith("✅") and "Gas" in label for label in labels)
+
+
+async def test_a_second_tap_untoggles_it() -> None:
+    state = await state_with(
+        AddPlace.category, latitude=55.75, longitude=37.61, categories=["fuel"]
+    )
+    callback = FakeCallbackQuery("add_place:category:fuel")
+
+    await handle_category(callback, state)
+
+    assert (await state.get_data())["categories"] == []
+
+
+async def test_two_categories_can_be_picked_together() -> None:
+    state = await state_with(
+        AddPlace.category, latitude=55.75, longitude=37.61, categories=["fuel"]
+    )
+
+    await handle_category(FakeCallbackQuery("add_place:category:cafe"), state)
+
+    assert (await state.get_data())["categories"] == ["fuel", "cafe"]
+
+
+async def test_done_moves_on_to_the_name() -> None:
+    state = await state_with(
+        AddPlace.category, latitude=55.75, longitude=37.61, categories=["fuel", "cafe"]
+    )
+    callback = FakeCallbackQuery("add_place:category:done")
+
+    await handle_category(callback, state)
+
     assert await state.get_state() == AddPlace.name.state
     assert "nom" in str(callback.message.answers[0]["text"]).lower()
     assert callback.alerts == [None]
+
+
+async def test_done_with_nothing_picked_is_refused() -> None:
+    state = await state_with(AddPlace.category, latitude=55.75, longitude=37.61)
+    callback = FakeCallbackQuery("add_place:category:done")
+
+    await handle_category(callback, state)
+
+    assert await state.get_state() == AddPlace.category.state
+    assert "bitta" in str(callback.alerts[0]).lower()
 
 
 async def test_category_step_keeps_the_coordinates_it_was_given() -> None:
@@ -346,7 +399,11 @@ async def test_the_border_group_opens_its_two_members() -> None:
     assert await state.get_state() == AddPlace.category.state
     keyboard = callback.message.answers[0]["reply_markup"]
     data = [row[0].callback_data for row in keyboard.inline_keyboard]
-    assert data == ["add_place:category:border_kz", "add_place:category:border_ru"]
+    assert data == [
+        "add_place:category:border_kz",
+        "add_place:category:border_ru",
+        "add_place:category:done",
+    ]
 
 
 async def test_name_step_stores_the_name_and_asks_for_a_note() -> None:
@@ -456,12 +513,13 @@ async def test_a_recategorised_place_returns_to_the_preview() -> None:
         FakeCallbackQuery("add_place:preview:category"), state
     )
 
-    picked = FakeCallbackQuery("add_place:category:cafe")
-    await handle_category(picked, state)
+    await handle_category(FakeCallbackQuery("add_place:category:cafe"), state)
+    done = FakeCallbackQuery("add_place:category:done")
+    await handle_category(done, state)
 
     assert await state.get_state() == AddPlace.preview.state
-    assert (await state.get_data())["category"] == "cafe"
-    text = str(picked.message.answers[0]["text"])
+    assert (await state.get_data())["categories"] == ["fuel", "cafe"]
+    text = str(done.message.answers[0]["text"])
     assert "shunday ko'rinadi" in text
     assert "Kafe" in text
 
@@ -500,7 +558,7 @@ def seeded_add_place() -> AddPlaceUseCase:
     add_place.execute(
         user_id=7,
         name="Газпром",
-        category=PlaceCategory.FUEL,
+        categories=(PlaceCategory.FUEL,),
         coordinates=Coordinates(latitude=55.75, longitude=37.61),
     )
     return add_place
@@ -529,7 +587,7 @@ async def test_a_far_away_namesake_is_not_a_duplicate() -> None:
     add_place.execute(
         user_id=7,
         name="Газпром",
-        category=PlaceCategory.FUEL,
+        categories=(PlaceCategory.FUEL,),
         coordinates=Coordinates(latitude=56.50, longitude=37.61),
     )
     state = await state_with(AddPlace.preview, **FULL_DATA)

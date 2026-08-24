@@ -165,7 +165,7 @@ def seed_place(places, user_id: int = 7, name: str = "Газпром"):
     return AddPlaceUseCase(places).execute(
         user_id=user_id,
         name=name,
-        category=PlaceCategory.FUEL,
+        categories=(PlaceCategory.FUEL,),
         coordinates=Coordinates(latitude=55.75, longitude=37.61),
     )
 

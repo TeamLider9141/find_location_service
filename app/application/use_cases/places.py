@@ -18,20 +18,25 @@ class AddPlaceUseCase:
         self,
         user_id: int,
         name: str,
-        category: PlaceCategory,
+        categories: tuple[PlaceCategory, ...],
         coordinates: Coordinates,
         note: str = "",
     ) -> Place:
         cleaned_name = name.strip()
         if not cleaned_name:
             raise ValueError("name must not be blank")
+        # One place, several hats: a roadside complex is a fuel station and a
+        # canteen at once. Order is kept, duplicates are not.
+        deduped = tuple(dict.fromkeys(categories))
+        if not deduped:
+            raise ValueError("at least one category is required")
 
         return self._repository.add(
             Place(
                 id=0,
                 added_by_user_id=user_id,
                 name=cleaned_name,
-                category=category,
+                categories=deduped,
                 coordinates=coordinates,
                 note=note.strip(),
                 # Both repositories stamp their own CURRENT_TIMESTAMP and discard

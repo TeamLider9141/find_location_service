@@ -14,7 +14,7 @@ class DeletionRecord:
 
     id: int
     place_name: str
-    category: PlaceCategory
+    categories: tuple[PlaceCategory, ...]
     latitude: float
     longitude: float
     note: str
@@ -23,3 +23,8 @@ class DeletionRecord:
     # "owner" — the driver removed their own place; "admin" — the panel did.
     source: str
     deleted_at: datetime
+
+    @property
+    def category(self) -> PlaceCategory:
+        """The first category — for the single-category views."""
+        return self.categories[0]

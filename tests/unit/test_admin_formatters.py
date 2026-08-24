@@ -43,7 +43,7 @@ def make_place(place_id: int = 1, name: str = "Газпром") -> Place:
         id=place_id,
         added_by_user_id=7,
         name=name,
-        category=PlaceCategory.FUEL,
+        categories=(PlaceCategory.FUEL,),
         coordinates=Coordinates(latitude=55.75, longitude=37.61),
         note="",
         created_at=STAMP,
@@ -278,7 +278,7 @@ def test_the_deletion_journal_reads_as_a_numbered_list() -> None:
     record = DeletionRecord(
         id=1,
         place_name="Газпром",
-        category=PlaceCategory.FUEL,
+        categories=(PlaceCategory.FUEL,),
         latitude=55.75,
         longitude=37.61,
         note="",
@@ -303,7 +303,7 @@ def test_an_admin_deletion_is_labelled_as_such() -> None:
     record = DeletionRecord(
         id=1,
         place_name="Газпром",
-        category=PlaceCategory.FUEL,
+        categories=(PlaceCategory.FUEL,),
         latitude=55.75,
         longitude=37.61,
         note="",

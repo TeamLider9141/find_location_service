@@ -10,7 +10,7 @@ from app.infrastructure.repositories.in_memory_places import InMemoryPlaceReposi
 
 def make_place(
     name: str = "Газпром",
-    category: PlaceCategory = PlaceCategory.FUEL,
+    categories: tuple[PlaceCategory, ...] = (PlaceCategory.FUEL,),
     latitude: float = 55.75,
     longitude: float = 37.61,
     user_id: int = 42,
@@ -20,7 +20,7 @@ def make_place(
         id=0,
         added_by_user_id=user_id,
         name=name,
-        category=category,
+        categories=categories,
         coordinates=Coordinates(latitude=latitude, longitude=longitude),
         note=note,
         created_at=datetime(2026, 1, 1),
@@ -245,7 +245,7 @@ def test_update_rejects_a_non_enum_category_rather_than_storing_it() -> None:
     # Storing the raw string would leave a Place whose category is not a
     # PlaceCategory, poisoning every later read of that place.
     repository = InMemoryPlaceRepository()
-    stored = repository.add(make_place(category=PlaceCategory.FUEL, user_id=42))
+    stored = repository.add(make_place(categories=(PlaceCategory.FUEL,), user_id=42))
 
     with pytest.raises(AttributeError):
         repository.update(stored.id, user_id=42, category="cafe")  # type: ignore[arg-type]
@@ -261,7 +261,7 @@ def test_add_rejects_a_non_enum_category_rather_than_storing_it() -> None:
     repository = InMemoryPlaceRepository()
 
     with pytest.raises(AttributeError):
-        repository.add(make_place(category="fuel"))  # type: ignore[arg-type]
+        repository.add(make_place(categories=("fuel",)))  # type: ignore[arg-type]
 
     assert repository.search() == []
 
@@ -273,6 +273,6 @@ def test_add_rejects_none_as_a_category_rather_than_storing_it() -> None:
     repository = InMemoryPlaceRepository()
 
     with pytest.raises(AttributeError):
-        repository.add(make_place(category=None))  # type: ignore[arg-type]
+        repository.add(make_place(categories=(None,)))  # type: ignore[arg-type]
 
     assert repository.search() == []

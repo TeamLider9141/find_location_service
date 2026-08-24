@@ -13,7 +13,7 @@ class InMemoryDeletionLog:
             DeletionRecord(
                 id=len(self._records) + 1,
                 place_name=place.name,
-                category=place.category,
+                categories=place.categories,
                 latitude=place.coordinates.latitude,
                 longitude=place.coordinates.longitude,
                 note=place.note,

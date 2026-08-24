@@ -1,6 +1,29 @@
 from enum import Enum
 
 
+def join_categories(categories: "tuple[PlaceCategory, ...]") -> str:
+    """Serialize for the single TEXT column the places table already has.
+
+    Old rows hold one bare value; new rows hold a comma list. Both parse back
+    through :func:`split_categories`, so no migration is needed.
+    """
+    return ",".join(category.value for category in categories)
+
+
+def split_categories(raw: str) -> "tuple[PlaceCategory, ...]":
+    parsed = []
+    for piece in raw.split(","):
+        cleaned = piece.strip()
+        if not cleaned:
+            continue
+        try:
+            parsed.append(PlaceCategory(cleaned))
+        except ValueError:
+            # A value written by a future version is skipped, not fatal.
+            continue
+    return tuple(parsed)
+
+
 class PlaceCategory(str, Enum):
     RESTAURANT = "restaurant"
     CAFE = "cafe"
