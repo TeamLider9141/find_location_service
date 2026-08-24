@@ -13,6 +13,12 @@ dev = [
     "pytest-asyncio>=0.24,<1",
 ]
 
+# Without this, setuptools scans the working tree and refuses to build once
+# data/ exists next to app/ — which it always does on a server that has run
+# the bot even once.
+[tool.setuptools.packages.find]
+include = ["app*"]
+
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
