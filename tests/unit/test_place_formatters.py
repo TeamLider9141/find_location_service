@@ -148,10 +148,14 @@ def test_empty_results_explain_the_database_is_the_only_source() -> None:
     assert "qo'shish" in text.lower()
 
 
-def test_every_result_offers_a_navigator_route() -> None:
-    # Our number is an estimate; the Yandex link is the navigator's own route,
-    # on the map that actually knows the local roads.
+def test_every_result_offers_both_navigator_routes() -> None:
+    # Our number is an estimate; the links are the navigators' own routes.
+    # Plain URLs — they cost nothing and have no relation to any API quota.
     text = format_place_results([make_place()])
 
     assert 'href="https://yandex.com/maps/?rtext=~55.75,37.61&rtt=auto"' in text
-    assert "Yandex marshrut" in text
+    assert (
+        'href="https://www.google.com/maps/dir/?api=1'
+        '&destination=55.75,37.61&travelmode=driving"'
+    ) in text
+    assert "Marshrut:" in text
