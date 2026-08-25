@@ -343,13 +343,39 @@ async def test_category_browse_survives_a_message_too_old_to_answer() -> None:
     assert callback.alerts[0] is not None
 
 
-async def test_nearby_start_asks_for_a_location() -> None:
+async def test_nearby_start_asks_for_a_location_naming_the_radius() -> None:
+    # The search is only as wide as a setting the driver may never have
+    # opened; the prompt says so up front.
     message = FakeMessage()
     state = make_state()
 
-    await handle_nearby_start(message, state)
+    await handle_nearby_start(message, state, InMemoryUserSettingsStore())
 
     assert await state.get_state() == NearbyPlace.location.state
+    text = str(message.answers[0]["text"])
+    assert "50 km" in text
+    assert "qo'shilgan" in text
+
+
+async def test_an_empty_radius_suggests_widening_it() -> None:
+    # The generic "nothing found" invites adding a place; here the likelier
+    # fix is one tap away in the settings.
+    state = make_state()
+    await state.set_state(NearbyPlace.location)
+    message = FakeMessage()
+    message.location = FakeLocation(latitude=10.0, longitude=10.0)
+
+    await handle_nearby_location(
+        message,
+        state,
+        nearby_places=NearbyPlacesUseCase(InMemoryPlaceRepository()),
+        user_settings=InMemoryUserSettingsStore(),
+    )
+
+    text = str(message.answers[0]["text"])
+    assert "50 km" in text
+    assert "oshiring" in text
+    assert "Sozlamalar" in text
 
 
 async def test_nearby_returns_the_closest_place_first() -> None:

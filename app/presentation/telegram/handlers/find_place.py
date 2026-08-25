@@ -48,8 +48,14 @@ ASK_QUERY_MESSAGE = (
     "Joy nomini yozing yoki kategoriyani tanlang.\n"
     "Masalan: Газпром, Кафе У Дороги."
 )
-ASK_NEARBY_LOCATION_MESSAGE = (
-    "Hozirgi lokatsiyangizni yuboring — yaqin atrofdagi joylarni ko'rsataman."
+# Both carry the driver's own radius: the search is only as wide as the
+# setting they may never have opened.
+NEARBY_PROMPT_TEMPLATE = (
+    "Lokatsiyangizni yuboring — {radius_km} km radiusdagi qo'shilgan "
+    "joylarni ko'rsataman."
+)
+NEARBY_EMPTY_TEMPLATE = (
+    "{radius_km} km ichida joy topilmadi — ⚙️ Sozlamalardan radiusni oshiring."
 )
 NOT_A_LOCATION_MESSAGE = (
     "Buni lokatsiya sifatida o'qiy olmadim. Telegram lokatsiyasini yuboring."
@@ -130,9 +136,19 @@ async def handle_category_browse(
 
 
 @router.message(F.text == NEARBY_BUTTON)
-async def handle_nearby_start(message: Message, state: FSMContext) -> None:
+async def handle_nearby_start(
+    message: Message, state: FSMContext, user_settings: UserSettingsStore
+) -> None:
     await state.set_state(NearbyPlace.location)
-    await message.answer(ASK_NEARBY_LOCATION_MESSAGE)
+    await message.answer(
+        NEARBY_PROMPT_TEMPLATE.format(radius_km=_radius_km(message, user_settings))
+    )
+
+
+def _radius_km(message: Message, user_settings: UserSettingsStore) -> int:
+    user_id = user_id_of(message)
+    settings = user_settings.get(user_id) if user_id is not None else UserSettings()
+    return settings.nearby_radius_meters // 1000
 
 
 @router.message(NearbyPlace.location)
@@ -168,7 +184,11 @@ async def handle_nearby_location(
     await state.clear()
 
     if not places:
-        await _send_results(message, [])
+        # The generic "nothing found" invites adding a place; here the likelier
+        # fix is one tap away in the settings.
+        await message.answer(
+            NEARBY_EMPTY_TEMPLATE.format(radius_km=settings.nearby_radius_meters // 1000)
+        )
         return
 
     places, distances, note = await _by_road_or_by_air(

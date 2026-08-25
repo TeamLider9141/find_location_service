@@ -118,7 +118,7 @@ class Journey:
         return message
 
     async def nearby(self, coordinates: tuple[float, float]) -> FakeMessage:
-        await handle_nearby_start(FakeMessage(), self.state)
+        await handle_nearby_start(FakeMessage(), self.state, self.settings)
         message = FakeLocationMessage(*coordinates)
         await handle_nearby_location(message, self.state, self.nearby_places, self.settings)
         return message
