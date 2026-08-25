@@ -68,6 +68,19 @@ async def test_a_short_link_is_chased_to_its_coordinates() -> None:
     assert resolver.asked == ["https://maps.app.goo.gl/CtkXwh38Y2wVdGhe6"]
 
 
+async def test_a_yandex_short_link_is_chased_to_its_pin() -> None:
+    resolver = FakeResolver(
+        "https://yandex.uz/maps/10335/tashkent/"
+        "?ll=69.100000%2C41.100000&whatshere%5Bpoint%5D=69.240562%2C41.311081&z=17"
+    )
+    message = FakeMessage(text="https://yandex.uz/maps/-/CHFGVC~x")
+
+    parsed = await coordinates_from_message(message, resolver)
+
+    assert (parsed.latitude, parsed.longitude) == (41.311081, 69.240562)
+    assert resolver.asked == ["https://yandex.uz/maps/-/CHFGVC~x"]
+
+
 async def test_a_dead_link_is_unreadable_not_an_error() -> None:
     message = FakeMessage(text="https://maps.app.goo.gl/xyz")
 

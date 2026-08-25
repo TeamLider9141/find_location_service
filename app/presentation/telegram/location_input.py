@@ -48,6 +48,14 @@ def _parse_coordinates_from_url(url: str) -> Coordinates | None:
             if coordinates is not None:
                 return coordinates
 
+    # Yandex pins, written lon,lat. Like Google's !3d!4d they name the shared
+    # place itself, so they outrank the ll viewport centre that rides along.
+    for key in ("whatshere[point]", "pt"):
+        for value in query.get(key, []):
+            coordinates = _parse_lon_lat_pair(value)
+            if coordinates is not None:
+                return coordinates
+
     for value in query.get("ll", []):
         coordinates = _parse_lon_lat_pair(value)
         if coordinates is not None:
