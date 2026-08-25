@@ -185,7 +185,7 @@ async def _overview_sketch(
     if not places:
         return None
 
-    return await overview_map.render([place.coordinates for place in places])
+    return await overview_map.render(places)
 
 
 def _radius_km(message: Message, user_settings: UserSettingsStore) -> int:
