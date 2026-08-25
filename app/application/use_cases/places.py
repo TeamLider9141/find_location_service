@@ -133,6 +133,7 @@ class UpdatePlaceUseCase:
         name: str | None = None,
         category: PlaceCategory | None = None,
         note: str | None = None,
+        coordinates: Coordinates | None = None,
     ) -> Place | None:
         cleaned_name = name
         if name is not None:
@@ -151,6 +152,7 @@ class UpdatePlaceUseCase:
             # A blank note is not the same as no note: "" clears the text, None
             # leaves whatever is stored alone.
             note=note.strip() if note is not None else None,
+            coordinates=coordinates,
         )
 
 

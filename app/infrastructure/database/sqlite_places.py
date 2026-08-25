@@ -173,9 +173,14 @@ class SQLitePlaceRepository:
         name: str | None = None,
         category: PlaceCategory | None = None,
         note: str | None = None,
+        coordinates: Coordinates | None = None,
     ) -> Place | None:
         assignments: list[str] = []
         parameters: list[object] = []
+
+        if coordinates is not None:
+            assignments.extend(["latitude = ?", "longitude = ?"])
+            parameters.extend([coordinates.latitude, coordinates.longitude])
 
         if name is not None:
             assignments.extend(["name = ?", "name_normalized = ?"])

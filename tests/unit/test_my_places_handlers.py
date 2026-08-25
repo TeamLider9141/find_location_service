@@ -11,6 +11,11 @@ from app.domain.value_objects.coordinates import Coordinates
 from app.infrastructure.repositories.in_memory_deletions import InMemoryDeletionLog
 from app.infrastructure.repositories.in_memory_places import InMemoryPlaceRepository
 from app.presentation.telegram.keyboards.places import BORDER_CATEGORIES, BORDER_GROUP_VALUE
+from aiogram.fsm.context import FSMContext
+from aiogram.fsm.storage.base import StorageKey
+from aiogram.fsm.storage.memory import MemoryStorage
+
+from app.presentation.telegram.states import EditPlace
 from app.presentation.telegram.handlers.my_places import (
     INVALID_SELECTION_MESSAGE,
     NOT_YOURS_MESSAGE,
@@ -18,7 +23,14 @@ from app.presentation.telegram.handlers.my_places import (
     handle_category_prompt,
     handle_confirm_delete,
     handle_delete_prompt,
+    handle_clear_note,
+    handle_move,
+    handle_move_prompt,
     handle_my_places,
+    handle_rename,
+    handle_rename_prompt,
+    handle_renote,
+    handle_renote_prompt,
     handle_set_category,
 )
 
@@ -31,8 +43,9 @@ class FakeUser:
 
 
 class FakeMessage:
-    def __init__(self, user_id: int = 42) -> None:
+    def __init__(self, user_id: int = 42, text: str = "") -> None:
         self.from_user = FakeUser(user_id)
+        self.text = text
         self.answers: list[dict[str, object]] = []
 
     async def answer(self, text: str, **kwargs: object) -> None:
@@ -98,6 +111,9 @@ async def test_my_places_offers_actions_on_each_of_my_places() -> None:
     keyboard = message.answers[0]["reply_markup"]
     callback_data = [row[0].callback_data for row in keyboard.inline_keyboard]
     assert callback_data == [
+        f"my_place:rename:{place.id}",
+        f"my_place:renote:{place.id}",
+        f"my_place:move:{place.id}",
         f"my_place:category:{place.id}",
         f"my_place:delete:{place.id}",
     ]
@@ -459,3 +475,142 @@ async def test_a_super_deleting_their_own_place_hears_no_echo() -> None:
     )
 
     assert bot.sent == []
+
+
+def make_state(user_id: int = 42) -> FSMContext:
+    return FSMContext(
+        storage=MemoryStorage(),
+        key=StorageKey(bot_id=0, chat_id=user_id, user_id=user_id),
+    )
+
+
+async def _edit_state(place_id: int, edit_state) -> FSMContext:
+    state = make_state()
+    await state.set_state(edit_state)
+    await state.update_data(edit_place_id=place_id)
+    return state
+
+
+async def test_the_rename_prompt_remembers_which_place() -> None:
+    state = make_state()
+    callback = FakeCallbackQuery("my_place:rename:7", user_id=42)
+
+    await handle_rename_prompt(callback, state)
+
+    assert await state.get_state() == EditPlace.name.state
+    assert (await state.get_data())["edit_place_id"] == 7
+    assert "nomini" in str(callback.message.answers[0]["text"]).lower()
+
+
+async def test_renaming_rewrites_the_card() -> None:
+    repository, place = seeded()
+    state = await _edit_state(place.id, EditPlace.name)
+    message = FakeMessage(text="  Лукойл  ", user_id=42)
+
+    await handle_rename(message, state, update_place=UpdatePlaceUseCase(repository))
+
+    assert repository.get(place.id).name == "Лукойл"
+    assert await state.get_state() is None
+    text = str(message.answers[-1]["text"])
+    assert "Yangilandi" in text
+    assert "Лукойл" in text
+
+
+async def test_a_blank_new_name_is_refused_and_the_flow_waits() -> None:
+    repository, place = seeded()
+    state = await _edit_state(place.id, EditPlace.name)
+    message = FakeMessage(text="   ", user_id=42)
+
+    await handle_rename(message, state, update_place=UpdatePlaceUseCase(repository))
+
+    assert repository.get(place.id).name == "Газпром"
+    assert await state.get_state() == EditPlace.name.state
+
+
+async def test_a_stranger_cannot_rename_someone_elses_place() -> None:
+    repository, place = seeded()  # belongs to 42
+    state = make_state(user_id=7)
+    await state.set_state(EditPlace.name)
+    await state.update_data(edit_place_id=place.id)
+    message = FakeMessage(text="Меники", user_id=7)
+
+    await handle_rename(message, state, update_place=UpdatePlaceUseCase(repository))
+
+    assert repository.get(place.id).name == "Газпром"
+    assert NOT_YOURS_MESSAGE in str(message.answers[-1]["text"])
+
+
+async def test_the_note_is_replaced() -> None:
+    repository, place = seeded()
+    state = await _edit_state(place.id, EditPlace.note)
+    message = FakeMessage(text="M5, kechasi ochiq", user_id=42)
+
+    await handle_renote(message, state, update_place=UpdatePlaceUseCase(repository))
+
+    assert repository.get(place.id).note == "M5, kechasi ochiq"
+
+
+async def test_skip_clears_the_note() -> None:
+    # /skip clears: a blank note is a value here, not an omission.
+    repository, place = seeded()
+    UpdatePlaceUseCase(repository).execute(
+        place_id=place.id, user_id=42, note="eski izoh"
+    )
+    state = await _edit_state(place.id, EditPlace.note)
+
+    await handle_clear_note(
+        FakeMessage(text="/skip", user_id=42),
+        state,
+        update_place=UpdatePlaceUseCase(repository),
+    )
+
+    assert repository.get(place.id).note == ""
+
+
+async def test_the_location_moves_to_the_new_coordinates() -> None:
+    repository, place = seeded()
+    state = await _edit_state(place.id, EditPlace.location)
+    message = FakeMessage(text="41.36, 69.28", user_id=42)
+    message.location = None
+    message.venue = None
+
+    await handle_move(message, state, update_place=UpdatePlaceUseCase(repository))
+
+    moved = repository.get(place.id)
+    assert (moved.coordinates.latitude, moved.coordinates.longitude) == (41.36, 69.28)
+    assert "41.36" in str(message.answers[-1]["text"])
+
+
+async def test_a_short_link_moves_the_place_too() -> None:
+    class FakeResolver:
+        async def resolve(self, url: str) -> str:
+            return "https://www.google.com/maps/place/X/data=!3d41.364!4d69.288"
+
+    repository, place = seeded()
+    state = await _edit_state(place.id, EditPlace.location)
+    message = FakeMessage(text="https://maps.app.goo.gl/abc", user_id=42)
+    message.location = None
+    message.venue = None
+
+    await handle_move(
+        message,
+        state,
+        update_place=UpdatePlaceUseCase(repository),
+        link_resolver=FakeResolver(),
+    )
+
+    moved = repository.get(place.id)
+    assert (moved.coordinates.latitude, moved.coordinates.longitude) == (41.364, 69.288)
+
+
+async def test_an_unreadable_location_keeps_the_flow_waiting() -> None:
+    repository, place = seeded()
+    state = await _edit_state(place.id, EditPlace.location)
+    message = FakeMessage(text="не координаты", user_id=42)
+    message.location = None
+    message.venue = None
+
+    await handle_move(message, state, update_place=UpdatePlaceUseCase(repository))
+
+    assert await state.get_state() == EditPlace.location.state
+    assert repository.get(place.id).coordinates.latitude == 55.75

@@ -118,6 +118,7 @@ class InMemoryPlaceRepository:
         name: str | None = None,
         category: PlaceCategory | None = None,
         note: str | None = None,
+        coordinates: Coordinates | None = None,
     ) -> Place | None:
         # The real repository reads category.value while building its UPDATE, so
         # it rejects a non-enum before it ever looks at ownership. Storing the
@@ -134,6 +135,7 @@ class InMemoryPlaceRepository:
             name=place.name if name is None else name,
             categories=place.categories if category is None else (category,),
             note=place.note if note is None else note,
+            coordinates=place.coordinates if coordinates is None else coordinates,
         )
         self._places[place_id] = updated
         return updated

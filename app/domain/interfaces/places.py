@@ -52,6 +52,7 @@ class PlaceRepository(Protocol):
         name: str | None = None,
         category: PlaceCategory | None = None,
         note: str | None = None,
+        coordinates: Coordinates | None = None,
     ) -> Place | None:
         """Change a place the user contributed.
 

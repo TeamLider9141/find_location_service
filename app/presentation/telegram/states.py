@@ -12,6 +12,14 @@ class AddPlace(StatesGroup):
     duplicate = State()
 
 
+class EditPlace(StatesGroup):
+    """Rewriting one field of an existing place; the id rides in the data."""
+
+    name = State()
+    note = State()
+    location = State()
+
+
 class FindPlace(StatesGroup):
     query = State()
 

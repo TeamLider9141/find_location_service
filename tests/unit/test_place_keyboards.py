@@ -98,6 +98,9 @@ def test_duplicate_confirmation_offers_both_answers() -> None:
 
 def test_my_place_actions_target_one_place() -> None:
     assert _callback_data(build_my_place_actions_keyboard(7)) == [
+        "my_place:rename:7",
+        "my_place:renote:7",
+        "my_place:move:7",
         "my_place:category:7",
         "my_place:delete:7",
     ]

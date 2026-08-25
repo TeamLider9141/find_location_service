@@ -1,6 +1,8 @@
 import sqlite3
 
 from aiogram import Bot, F, Router
+from aiogram.filters import Command
+from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
 from app.application.use_cases.places import (
@@ -15,7 +17,10 @@ from app.presentation.telegram.errors import (
     report_service_error,
     user_id_of,
 )
+from app.domain.interfaces.links import LinkResolver
 from app.presentation.telegram.formatters import format_place_card
+from app.presentation.telegram.location_resolution import coordinates_from_message
+from app.presentation.telegram.states import EditPlace
 from app.presentation.telegram.keyboards.menu import MY_PLACES_BUTTON
 from app.presentation.telegram.notifications import announce_owner_deletion
 from app.presentation.telegram.keyboards.places import (
@@ -38,6 +43,20 @@ INVALID_SELECTION_MESSAGE = "Tanlov eskirgan. 📒 Mening joylarim dan qaytadan 
 DELETED_MESSAGE = "🗑 O'chirildi."
 CANCELLED_MESSAGE = "O'chirish bekor qilindi."
 DATABASE_ERROR_MESSAGE = "Baza bilan muammo. Birozdan so'ng urinib ko'ring."
+ASK_NEW_NAME_MESSAGE = "Yangi nomini yozing."
+BLANK_NAME_MESSAGE = "Nom bo'sh bo'lmasligi kerak. Yangi nomini yozing."
+ASK_NEW_NOTE_MESSAGE = "Yangi izohni yozing. Izohni olib tashlash uchun /skip."
+ASK_NEW_LOCATION_MESSAGE = (
+    "Yangi lokatsiyani yuboring — Telegram lokatsiyasi, xarita linki "
+    "yoki koordinata: 55.75, 37.61"
+)
+NOT_A_LOCATION_MESSAGE = (
+    "Buni lokatsiya sifatida o'qiy olmadim. "
+    "Lokatsiya, xarita linki yoki koordinata yuboring."
+)
+UPDATED_MESSAGE = "✅ Yangilandi."
+
+_EDIT_PLACE_KEY = "edit_place_id"
 
 
 @router.message(F.text == MY_PLACES_BUTTON)
@@ -142,6 +161,142 @@ async def handle_set_category(
         reply_markup=build_my_place_actions_keyboard(place.id),
     )
     await callback_query.answer()
+
+
+@router.callback_query(F.data.startswith("my_place:rename:"))
+async def handle_rename_prompt(callback_query: CallbackQuery, state: FSMContext) -> None:
+    await _prompt_edit(
+        callback_query, state, "my_place:rename:", EditPlace.name, ASK_NEW_NAME_MESSAGE
+    )
+
+
+@router.callback_query(F.data.startswith("my_place:renote:"))
+async def handle_renote_prompt(callback_query: CallbackQuery, state: FSMContext) -> None:
+    await _prompt_edit(
+        callback_query, state, "my_place:renote:", EditPlace.note, ASK_NEW_NOTE_MESSAGE
+    )
+
+
+@router.callback_query(F.data.startswith("my_place:move:"))
+async def handle_move_prompt(callback_query: CallbackQuery, state: FSMContext) -> None:
+    await _prompt_edit(
+        callback_query,
+        state,
+        "my_place:move:",
+        EditPlace.location,
+        ASK_NEW_LOCATION_MESSAGE,
+    )
+
+
+async def _prompt_edit(
+    callback_query: CallbackQuery,
+    state: FSMContext,
+    prefix: str,
+    next_state,
+    ask: str,
+) -> None:
+    """Remember which place is being edited and ask for the new value.
+
+    Ownership is not checked here: the write itself refuses a stranger, and
+    one source of truth beats a prompt-time check a forged callback could
+    outrun anyway.
+    """
+    place_id = _parse_id(callback_query.data, prefix)
+    if place_id is None:
+        await callback_query.answer(INVALID_SELECTION_MESSAGE)
+        return
+
+    message = answerable_message(callback_query)
+    if message is None:
+        await callback_query.answer(EXPIRED_MESSAGE)
+        return
+
+    await state.set_state(next_state)
+    await state.update_data(**{_EDIT_PLACE_KEY: place_id})
+    await message.answer(ask)
+    await callback_query.answer()
+
+
+@router.message(EditPlace.name, F.text)
+async def handle_rename(
+    message: Message, state: FSMContext, update_place: UpdatePlaceUseCase
+) -> None:
+    name = (message.text or "").strip()
+    if not name:
+        # Same rule as adding one: a place has to keep a name other drivers
+        # can search for.
+        await message.answer(BLANK_NAME_MESSAGE)
+        return
+
+    await _apply_edit(message, state, update_place, name=name)
+
+
+@router.message(EditPlace.note, Command("skip"))
+async def handle_clear_note(
+    message: Message, state: FSMContext, update_place: UpdatePlaceUseCase
+) -> None:
+    # /skip clears: a blank note is a value here, not an omission.
+    await _apply_edit(message, state, update_place, note="")
+
+
+@router.message(EditPlace.note, F.text)
+async def handle_renote(
+    message: Message, state: FSMContext, update_place: UpdatePlaceUseCase
+) -> None:
+    await _apply_edit(message, state, update_place, note=message.text or "")
+
+
+@router.message(EditPlace.location)
+async def handle_move(
+    message: Message,
+    state: FSMContext,
+    update_place: UpdatePlaceUseCase,
+    link_resolver: LinkResolver | None = None,
+) -> None:
+    # The same reader the add flow uses: location, venue, coordinates, full
+    # map link, or a short link chased through its redirect.
+    coordinates = await coordinates_from_message(message, link_resolver)
+    if coordinates is None:
+        await message.answer(NOT_A_LOCATION_MESSAGE)
+        return
+
+    await _apply_edit(message, state, update_place, coordinates=coordinates)
+
+
+async def _apply_edit(
+    message: Message,
+    state: FSMContext,
+    update_place: UpdatePlaceUseCase,
+    **changes,
+) -> None:
+    data = await state.get_data()
+    raw_place_id = data.get(_EDIT_PLACE_KEY)
+    user_id = user_id_of(message)
+    await state.clear()
+
+    if raw_place_id is None or user_id is None:
+        await message.answer(INVALID_SELECTION_MESSAGE)
+        return
+
+    try:
+        place = update_place.execute(
+            place_id=int(raw_place_id), user_id=user_id, **changes
+        )
+    except sqlite3.Error as error:
+        report_service_error(error, "edit place")
+        await message.answer(DATABASE_ERROR_MESSAGE)
+        return
+
+    # The refusal comes from the update itself returning None rather than a
+    # separate ownership read: one source of truth for who may edit.
+    if place is None:
+        await message.answer(NOT_YOURS_MESSAGE)
+        return
+
+    await message.answer(
+        f"{UPDATED_MESSAGE}\n\n{format_place_card(place)}",
+        reply_markup=build_my_place_actions_keyboard(place.id),
+    )
 
 
 @router.callback_query(F.data.startswith("my_place:delete:"))

@@ -192,6 +192,24 @@ def build_my_place_actions_keyboard(place_id: int) -> InlineKeyboardMarkup:
         inline_keyboard=[
             [
                 InlineKeyboardButton(
+                    text="✏️ Nomini o'zgartirish",
+                    callback_data=f"my_place:rename:{place_id}",
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="📝 Izohni o'zgartirish",
+                    callback_data=f"my_place:renote:{place_id}",
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="📍 Lokatsiyani o'zgartirish",
+                    callback_data=f"my_place:move:{place_id}",
+                )
+            ],
+            [
+                InlineKeyboardButton(
                     text="Kategoriyani o'zgartirish",
                     callback_data=f"my_place:category:{place_id}",
                 )
