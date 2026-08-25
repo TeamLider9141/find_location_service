@@ -81,6 +81,29 @@ async def test_a_yandex_short_link_is_chased_to_its_pin() -> None:
     assert resolver.asked == ["https://yandex.uz/maps/-/CHFGVC~x"]
 
 
+def test_an_org_page_body_gives_up_its_pin() -> None:
+    # A shared organisation link lands on a page whose URL says nothing; the
+    # place's own point sits in the body as displayCoordinates, written lon,lat.
+    from app.infrastructure.location_links import _with_body_pin
+    from app.presentation.telegram.location_input import parse_coordinates_from_text
+
+    url = _with_body_pin(
+        "https://yandex.uz/maps/org/mirzo_yusuf_masjidi/123347075733?si=abc",
+        '...huge page..."displayCoordinates":[69.291927,41.339779],"more":1...',
+    )
+
+    parsed = parse_coordinates_from_text(url)
+    assert parsed is not None
+    assert (parsed.latitude, parsed.longitude) == (41.339779, 69.291927)
+
+
+def test_a_body_without_a_pin_leaves_the_url_alone() -> None:
+    from app.infrastructure.location_links import _with_body_pin
+
+    url = "https://yandex.uz/maps/org/x/1?si=abc"
+    assert _with_body_pin(url, "<html>nothing here</html>") == url
+
+
 async def test_a_dead_link_is_unreadable_not_an_error() -> None:
     message = FakeMessage(text="https://maps.app.goo.gl/xyz")
 
