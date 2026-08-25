@@ -60,6 +60,43 @@ NEARBY_PROMPT_TEMPLATE = (
 OVERVIEW_CAPTION = (
     "🗺 Homaki xarita — bazadagi barcha joylar. Shular orasidan qidiriladi."
 )
+
+# What each dot on the sketch means. Mirrors the marker styles in the Google
+# renderer — a test asserts the two stay in step, the same way the throttle
+# defaults are checked against their middleware.
+CATEGORY_BADGES: dict[PlaceCategory, str] = {
+    PlaceCategory.RESTAURANT: "🟠 R",
+    PlaceCategory.CAFE: "🟤 C",
+    PlaceCategory.FUEL: "🔴 F",
+    PlaceCategory.HOTEL: "🔵 H",
+    PlaceCategory.PARKING: "⚪ P",
+    PlaceCategory.CAR_SERVICE: "⚫ S",
+    PlaceCategory.MOSQUE: "🟢 M",
+    PlaceCategory.BORDER_KZ: "🟡 K",
+    PlaceCategory.BORDER_RU: "🟡 U",
+    PlaceCategory.OTHER: "⚪ O",
+}
+MULTI_BADGE_LINE = "🟣 — bir nechta kategoriyali joy"
+
+
+def overview_legend(places: list) -> str:
+    """Name only the dots the picture actually shows — a full table of eleven
+    styles would bury the four that matter."""
+    from app.presentation.telegram.keyboards.categories import category_label
+
+    lines = []
+    for category in PlaceCategory:
+        drawn = any(
+            len(place.categories) == 1 and place.category is category
+            for place in places
+        )
+        if drawn:
+            lines.append(f"{CATEGORY_BADGES[category]} — {category_label(category)}")
+
+    if any(len(place.categories) > 1 for place in places):
+        lines.append(MULTI_BADGE_LINE)
+
+    return "\n".join(lines)
 NEARBY_EMPTY_TEMPLATE = (
     "{radius_km} km ichida joy topilmadi — ⚙️ Sozlamalardan radiusni oshiring."
 )
@@ -155,12 +192,13 @@ async def handle_nearby_start(
     # A sketch of everything the database holds, bounds fitted to the dots:
     # the driver sees what there even is before sharing where they are. Any
     # failure along the way quietly falls back to the plain prompt.
-    sketch = await _overview_sketch(find_places, overview_map)
+    sketch, sketched_places = await _overview_sketch(find_places, overview_map)
     if sketch is not None:
+        legend = overview_legend(sketched_places)
         try:
             await message.answer_photo(
                 BufferedInputFile(sketch, filename="joylar_xaritasi.png"),
-                caption=f"{OVERVIEW_CAPTION}\n\n{prompt}",
+                caption=f"{OVERVIEW_CAPTION}\n\n{legend}\n\n{prompt}",
             )
             return
         except TelegramAPIError as error:
@@ -172,20 +210,20 @@ async def handle_nearby_start(
 async def _overview_sketch(
     find_places: FindPlacesUseCase | None,
     overview_map: OverviewMapRenderer | None,
-) -> bytes | None:
+) -> tuple[bytes | None, list]:
     if find_places is None or overview_map is None:
-        return None
+        return None, []
 
     try:
         places = find_places.execute(limit=-1)
     except sqlite3.Error as error:
         report_service_error(error, "overview places")
-        return None
+        return None, []
 
     if not places:
-        return None
+        return None, []
 
-    return await overview_map.render(places)
+    return await overview_map.render(places), places
 
 
 def _radius_km(message: Message, user_settings: UserSettingsStore) -> int:

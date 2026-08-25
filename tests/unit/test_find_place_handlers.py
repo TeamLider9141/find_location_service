@@ -729,3 +729,69 @@ async def test_without_a_renderer_the_prompt_is_unchanged() -> None:
 
     assert message.photos == []
     assert "50 km" in str(message.answers[0]["text"])
+
+
+def test_the_legend_matches_the_renderers_marker_styles() -> None:
+    # Two copies of one truth: the badge table here and the marker styles in
+    # the Google renderer. This is the test that keeps them in step.
+    from app.infrastructure.maps.google_static import _CATEGORY_STYLES
+    from app.presentation.telegram.handlers.find_place import CATEGORY_BADGES
+
+    color_dots = {
+        "orange": "🟠", "brown": "🟤", "red": "🔴", "blue": "🔵",
+        "gray": "⚪", "black": "⚫", "green": "🟢", "yellow": "🟡",
+        "white": "⚪",
+    }
+    assert set(CATEGORY_BADGES) == set(_CATEGORY_STYLES)
+    for category, style in _CATEGORY_STYLES.items():
+        color = style.split("|")[0].removeprefix("color:")
+        letter = style.split("label:")[1]
+        assert CATEGORY_BADGES[category] == f"{color_dots[color]} {letter}"
+
+
+def test_the_legend_names_only_what_the_picture_shows() -> None:
+    from app.presentation.telegram.handlers.find_place import overview_legend
+
+    repository = seeded_repository()  # one fuel place, one cafe place
+
+    legend = overview_legend(repository.search(limit=-1))
+
+    assert "🔴 F — ⛽" in legend
+    assert "🟤 C — ☕" in legend
+    assert "Mehmonxona" not in legend
+    assert "🟣" not in legend
+
+
+def test_a_multi_category_place_earns_the_purple_line() -> None:
+    from app.presentation.telegram.handlers.find_place import (
+        MULTI_BADGE_LINE,
+        overview_legend,
+    )
+
+    repository = InMemoryPlaceRepository()
+    AddPlaceUseCase(repository).execute(
+        user_id=42,
+        name="Kompleks",
+        categories=(PlaceCategory.FUEL, PlaceCategory.RESTAURANT),
+        coordinates=Coordinates(latitude=41.3, longitude=69.2),
+    )
+
+    legend = overview_legend(repository.search(limit=-1))
+
+    assert legend == MULTI_BADGE_LINE
+
+
+async def test_the_sketch_caption_carries_the_legend() -> None:
+    message = FakeMessage()
+
+    await handle_nearby_start(
+        message,
+        make_state(),
+        InMemoryUserSettingsStore(),
+        find_places=FindPlacesUseCase(seeded_repository()),
+        overview_map=FakeOverviewMap(b"png"),
+    )
+
+    caption = str(message.photos[0]["caption"])
+    assert "🔴 F — ⛽" in caption
+    assert "🟤 C — ☕" in caption
