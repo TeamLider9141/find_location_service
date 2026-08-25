@@ -23,7 +23,9 @@ from app.presentation.telegram.errors import (
 )
 from aiogram.exceptions import TelegramAPIError
 
+from app.domain.interfaces.links import LinkResolver
 from app.domain.interfaces.routing import RoadRouter
+from app.presentation.telegram.location_resolution import coordinates_from_message
 from app.presentation.telegram.formatters import (
     ROAD_DISTANCE_NOTE,
     STRAIGHT_DISTANCE_NOTE,
@@ -140,8 +142,9 @@ async def handle_nearby_location(
     nearby_places: NearbyPlacesUseCase,
     user_settings: UserSettingsStore,
     road_router: RoadRouter | None = None,
+    link_resolver: LinkResolver | None = None,
 ) -> None:
-    coordinates = _coordinates_from_message(message)
+    coordinates = await coordinates_from_message(message, link_resolver)
     user_id = user_id_of(message)
     if coordinates is None or user_id is None:
         await message.answer(NOT_A_LOCATION_MESSAGE)
@@ -308,17 +311,3 @@ def _parse_place_id(data: str | None) -> int | None:
     # closed spinner, not an exception aiogram logs and the driver never sees.
     return int(raw) if raw.isdigit() else None
 
-
-def _coordinates_from_message(message: Message) -> Coordinates | None:
-    location = getattr(message, "location", None)
-    if location is not None:
-        return Coordinates(latitude=location.latitude, longitude=location.longitude)
-
-    venue = getattr(message, "venue", None)
-    if venue is not None and getattr(venue, "location", None) is not None:
-        return Coordinates(
-            latitude=venue.location.latitude,
-            longitude=venue.location.longitude,
-        )
-
-    return None

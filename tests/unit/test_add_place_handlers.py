@@ -653,3 +653,37 @@ async def test_cancel_clears_the_flow_at_any_step() -> None:
 
     assert await state.get_state() is None
     assert await state.get_data() == {}
+
+
+class FakeLinkResolver:
+    def __init__(self, final: str | None) -> None:
+        self._final = final
+
+    async def resolve(self, url: str) -> str | None:
+        return self._final
+
+
+async def test_a_short_map_link_is_read_as_a_location() -> None:
+    # maps.app.goo.gl carries nothing itself; the resolver chases the redirect
+    # and the pin in the final URL is the place.
+    state = await state_with(AddPlace.location)
+    message = FakeTextMessage(text="https://maps.app.goo.gl/CtkXwh38Y2wVdGhe6")
+    resolver = FakeLinkResolver(
+        "https://www.google.com/maps/place/X/@41.0,69.0,17z/data=!3d41.364!4d69.288"
+    )
+
+    await handle_location(message, state, link_resolver=resolver)
+
+    data = await state.get_data()
+    assert (data["latitude"], data["longitude"]) == (41.364, 69.288)
+    assert await state.get_state() == AddPlace.category.state
+
+
+async def test_a_short_link_that_leads_nowhere_reads_as_unreadable() -> None:
+    state = await state_with(AddPlace.location)
+    message = FakeTextMessage(text="https://maps.app.goo.gl/dead")
+
+    await handle_location(message, state, link_resolver=FakeLinkResolver(None))
+
+    assert await state.get_state() == AddPlace.location.state
+    assert "o'qiy olmadim" in str(message.answers[0]["text"])

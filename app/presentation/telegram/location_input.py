@@ -7,6 +7,15 @@ _DECIMAL_COORDINATE_RE = re.compile(
     r"(?<!\d)([-+]?\d{1,2}(?:\.\d+)?)\s*,\s*([-+]?\d{1,3}(?:\.\d+)?)(?!\d)"
 )
 _URL_RE = re.compile(r"https?://\S+")
+# Google's own pin marker in a full maps URL: !3d<lat>!4d<lon>. It names the
+# shared place itself, while the @lat,lon nearby is only the viewport centre.
+_GOOGLE_PIN_RE = re.compile(r"!3d([-+]?\d{1,2}(?:\.\d+)?)!4d([-+]?\d{1,3}(?:\.\d+)?)")
+
+
+def first_url(text: str) -> str | None:
+    """The first link in the text, for the resolver to chase."""
+    match = _URL_RE.search(text)
+    return None if match is None else match.group(0)
 
 
 def parse_coordinates_from_text(text: str) -> Coordinates | None:
@@ -22,6 +31,14 @@ def parse_coordinates_from_text(text: str) -> Coordinates | None:
 
 
 def _parse_coordinates_from_url(url: str) -> Coordinates | None:
+    # The pin outranks everything else in the URL: it is the shared place
+    # itself, while @lat,lon is only where the map happened to be centred.
+    pin = _GOOGLE_PIN_RE.search(url)
+    if pin is not None:
+        coordinates = _build_coordinates(latitude=pin.group(1), longitude=pin.group(2))
+        if coordinates is not None:
+            return coordinates
+
     parsed = urlsplit(url)
     query = parse_qs(parsed.query)
 

@@ -27,6 +27,8 @@ from app.presentation.telegram.keyboards.menu import (
     ADD_PLACE_BUTTON,
     build_main_menu_keyboard,
 )
+from app.domain.interfaces.links import LinkResolver
+from app.presentation.telegram.location_resolution import coordinates_from_message
 from app.presentation.telegram.keyboards.places import (
     BORDER_CATEGORIES,
     BORDER_GROUP_VALUE,
@@ -38,7 +40,6 @@ from app.presentation.telegram.keyboards.places import (
     build_duplicate_confirmation_keyboard,
     build_preview_keyboard,
 )
-from app.presentation.telegram.location_input import parse_coordinates_from_text
 from app.presentation.telegram.notifications import announce_add_request
 from app.presentation.telegram.states import AddPlace
 
@@ -143,8 +144,12 @@ async def _pass_the_gate(
 
 
 @router.message(AddPlace.location)
-async def handle_location(message: Message, state: FSMContext) -> None:
-    coordinates = _coordinates_from_message(message)
+async def handle_location(
+    message: Message,
+    state: FSMContext,
+    link_resolver: LinkResolver | None = None,
+) -> None:
+    coordinates = await coordinates_from_message(message, link_resolver)
     if coordinates is None:
         await message.answer(ASK_LOCATION_AGAIN_MESSAGE)
         return
@@ -441,21 +446,3 @@ def _parse_category(data: str | None) -> PlaceCategory | None:
     except ValueError:
         return None
 
-
-def _coordinates_from_message(message: Message) -> Coordinates | None:
-    location = getattr(message, "location", None)
-    if location is not None:
-        return Coordinates(latitude=location.latitude, longitude=location.longitude)
-
-    venue = getattr(message, "venue", None)
-    if venue is not None and getattr(venue, "location", None) is not None:
-        return Coordinates(
-            latitude=venue.location.latitude,
-            longitude=venue.location.longitude,
-        )
-
-    text = getattr(message, "text", None)
-    if text:
-        return parse_coordinates_from_text(text)
-
-    return None

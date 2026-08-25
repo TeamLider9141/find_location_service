@@ -33,6 +33,7 @@ from app.domain.interfaces.deletions import DeletionLog
 from app.domain.interfaces.places import PlaceRepository
 from app.domain.interfaces.routing import RoadRouter
 from app.domain.interfaces.users import UserRepository
+from app.infrastructure.location_links import HttpLinkResolver
 from app.infrastructure.routing.chain import FirstAnsweringRouter
 from app.infrastructure.routing.google_routes import GoogleRoutesRouter
 from app.infrastructure.routing.osrm import OsrmRouter
@@ -87,6 +88,7 @@ def create_dispatcher(
         admin_ids=all_admins,
         super_admin_ids=super_admin_ids,
         road_router=road_router,
+        link_resolver=HttpLinkResolver(),
     )
 
     # Throttling goes on first, so a flood is dropped before it reaches the
