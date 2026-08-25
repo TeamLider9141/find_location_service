@@ -42,9 +42,13 @@ class FakeMessage:
         self.location = None
         self.venue = None
         self.answers: list[dict[str, object]] = []
+        self.photos: list[dict[str, object]] = []
 
     async def answer(self, text: str, **kwargs: object) -> None:
         self.answers.append({"text": text, **kwargs})
+
+    async def answer_photo(self, photo: object, caption: str = "", **kwargs: object) -> None:
+        self.photos.append({"photo": photo, "caption": caption, **kwargs})
 
 
 class FakeLocation:
@@ -652,3 +656,76 @@ async def test_without_a_router_there_is_no_wait_notice() -> None:
 
     assert all("kuting" not in str(answer["text"]).lower() for answer in message.answers)
     assert "to'g'ri chiziq bo'yicha" in str(message.answers[-1]["text"])
+
+
+class FakeOverviewMap:
+    def __init__(self, image: bytes | None) -> None:
+        self._image = image
+        self.rendered: list[int] = []
+
+    async def render(self, points):
+        self.rendered.append(len(points))
+        return self._image
+
+
+async def test_nearby_start_sends_the_overview_sketch() -> None:
+    # The driver sees what the database even holds before sharing where they
+    # are; the prompt rides along as the caption.
+    message = FakeMessage()
+    overview = FakeOverviewMap(b"png")
+
+    await handle_nearby_start(
+        message,
+        make_state(),
+        InMemoryUserSettingsStore(),
+        find_places=FindPlacesUseCase(seeded_repository()),
+        overview_map=overview,
+    )
+
+    assert overview.rendered == [2]
+    assert len(message.photos) == 1
+    caption = str(message.photos[0]["caption"])
+    assert "Homaki xarita" in caption
+    assert "50 km" in caption
+    assert message.answers == []
+
+
+async def test_a_failed_sketch_falls_back_to_the_plain_prompt() -> None:
+    message = FakeMessage()
+
+    await handle_nearby_start(
+        message,
+        make_state(),
+        InMemoryUserSettingsStore(),
+        find_places=FindPlacesUseCase(seeded_repository()),
+        overview_map=FakeOverviewMap(None),
+    )
+
+    assert message.photos == []
+    assert "50 km" in str(message.answers[0]["text"])
+
+
+async def test_an_empty_database_needs_no_sketch() -> None:
+    message = FakeMessage()
+    overview = FakeOverviewMap(b"png")
+
+    await handle_nearby_start(
+        message,
+        make_state(),
+        InMemoryUserSettingsStore(),
+        find_places=FindPlacesUseCase(InMemoryPlaceRepository()),
+        overview_map=overview,
+    )
+
+    assert overview.rendered == []
+    assert message.photos == []
+    assert len(message.answers) == 1
+
+
+async def test_without_a_renderer_the_prompt_is_unchanged() -> None:
+    message = FakeMessage()
+
+    await handle_nearby_start(message, make_state(), InMemoryUserSettingsStore())
+
+    assert message.photos == []
+    assert "50 km" in str(message.answers[0]["text"])

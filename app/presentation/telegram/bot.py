@@ -33,7 +33,9 @@ from app.domain.interfaces.deletions import DeletionLog
 from app.domain.interfaces.places import PlaceRepository
 from app.domain.interfaces.routing import RoadRouter
 from app.domain.interfaces.users import UserRepository
+from app.domain.interfaces.maps import OverviewMapRenderer
 from app.infrastructure.location_links import HttpLinkResolver
+from app.infrastructure.maps.google_static import GoogleStaticMapRenderer
 from app.infrastructure.routing.chain import FirstAnsweringRouter
 from app.infrastructure.routing.google_routes import GoogleRoutesRouter
 from app.infrastructure.routing.osrm import OsrmRouter
@@ -59,6 +61,7 @@ def create_dispatcher(
     admin_ids: tuple[int, ...] = (),
     super_admin_ids: tuple[int, ...] = (),
     road_router: RoadRouter | None = None,
+    overview_map: OverviewMapRenderer | None = None,
 ) -> Dispatcher:
     # Supers are admins too: one variable answers "may they open the panel",
     # the other answers "may they delete and broadcast".
@@ -89,6 +92,7 @@ def create_dispatcher(
         super_admin_ids=super_admin_ids,
         road_router=road_router,
         link_resolver=HttpLinkResolver(),
+        overview_map=overview_map,
     )
 
     # Throttling goes on first, so a flood is dropped before it reaches the
@@ -141,6 +145,14 @@ def create_road_router(settings: Settings) -> RoadRouter | None:
     if len(routers) == 1:
         return routers[0]
     return FirstAnsweringRouter(tuple(routers))
+
+
+def create_overview_map(settings: Settings) -> OverviewMapRenderer | None:
+    # The sketch needs the Maps Static API enabled on the same key; when the
+    # key is absent the prompt simply goes out without a picture.
+    if not settings.google_maps_api_key:
+        return None
+    return GoogleStaticMapRenderer(settings.google_maps_api_key)
 
 
 def create_deletion_log(settings: Settings) -> DeletionLog:

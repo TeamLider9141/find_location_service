@@ -64,6 +64,7 @@ def test_dispatcher_injects_every_place_dependency(dispatcher: Dispatcher) -> No
         "revoke_add_access",
         "list_deletions",
         "link_resolver",
+        "overview_map",
         "admin_ids",
         "super_admin_ids",
     ):

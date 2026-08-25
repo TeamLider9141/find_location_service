@@ -8,6 +8,7 @@ from app.presentation.telegram.bot import (
     create_bot,
     create_deletion_log,
     create_dispatcher,
+    create_overview_map,
     create_place_repository,
     create_road_router,
     create_throttle_middleware,
@@ -40,6 +41,7 @@ async def run_bot() -> int:
         admin_ids=settings.admin_ids,
         super_admin_ids=settings.super_admin_ids,
         road_router=create_road_router(settings),
+        overview_map=create_overview_map(settings),
     )
     try:
         await configure_commands(bot, settings.all_admin_ids)

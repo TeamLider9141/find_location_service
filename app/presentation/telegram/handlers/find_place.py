@@ -23,7 +23,10 @@ from app.presentation.telegram.errors import (
 )
 from aiogram.exceptions import TelegramAPIError
 
+from aiogram.types import BufferedInputFile
+
 from app.domain.interfaces.links import LinkResolver
+from app.domain.interfaces.maps import OverviewMapRenderer
 from app.domain.interfaces.routing import RoadRouter
 from app.presentation.telegram.location_resolution import coordinates_from_message
 from app.presentation.telegram.formatters import (
@@ -53,6 +56,9 @@ ASK_QUERY_MESSAGE = (
 NEARBY_PROMPT_TEMPLATE = (
     "Lokatsiyangizni yuboring — {radius_km} km radiusdagi qo'shilgan "
     "joylarni ko'rsataman."
+)
+OVERVIEW_CAPTION = (
+    "🗺 Homaki xarita — bazadagi barcha joylar. Shular orasidan qidiriladi."
 )
 NEARBY_EMPTY_TEMPLATE = (
     "{radius_km} km ichida joy topilmadi — ⚙️ Sozlamalardan radiusni oshiring."
@@ -137,12 +143,49 @@ async def handle_category_browse(
 
 @router.message(F.text == NEARBY_BUTTON)
 async def handle_nearby_start(
-    message: Message, state: FSMContext, user_settings: UserSettingsStore
+    message: Message,
+    state: FSMContext,
+    user_settings: UserSettingsStore,
+    find_places: FindPlacesUseCase | None = None,
+    overview_map: OverviewMapRenderer | None = None,
 ) -> None:
     await state.set_state(NearbyPlace.location)
-    await message.answer(
-        NEARBY_PROMPT_TEMPLATE.format(radius_km=_radius_km(message, user_settings))
-    )
+    prompt = NEARBY_PROMPT_TEMPLATE.format(radius_km=_radius_km(message, user_settings))
+
+    # A sketch of everything the database holds, bounds fitted to the dots:
+    # the driver sees what there even is before sharing where they are. Any
+    # failure along the way quietly falls back to the plain prompt.
+    sketch = await _overview_sketch(find_places, overview_map)
+    if sketch is not None:
+        try:
+            await message.answer_photo(
+                BufferedInputFile(sketch, filename="joylar_xaritasi.png"),
+                caption=f"{OVERVIEW_CAPTION}\n\n{prompt}",
+            )
+            return
+        except TelegramAPIError as error:
+            report_service_error(error, "overview sketch")
+
+    await message.answer(prompt)
+
+
+async def _overview_sketch(
+    find_places: FindPlacesUseCase | None,
+    overview_map: OverviewMapRenderer | None,
+) -> bytes | None:
+    if find_places is None or overview_map is None:
+        return None
+
+    try:
+        places = find_places.execute(limit=-1)
+    except sqlite3.Error as error:
+        report_service_error(error, "overview places")
+        return None
+
+    if not places:
+        return None
+
+    return await overview_map.render([place.coordinates for place in places])
 
 
 def _radius_km(message: Message, user_settings: UserSettingsStore) -> int:

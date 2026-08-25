@@ -15,6 +15,10 @@ added it.
 - Search by name across Latin and Cyrillic spellings
 - Browse by category — each button carries its place count; empty categories
   keep a plain label
+- Tapping "nearby" first sends an overview sketch — every place in the
+  database as dots on one auto-fitted static map — so the driver knows what
+  there is before sharing their location. Needs the Maps Static API enabled
+  on the Google key; without it the plain prompt goes out
 - Find places near your current location, sorted by road distance — the nearest
   place by air is not always the nearest by road. Routing asks Google's Routes
   API first when a key is configured, then OSRM, and falls back to labelled
