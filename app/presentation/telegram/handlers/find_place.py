@@ -43,6 +43,7 @@ from app.presentation.telegram.keyboards.places import (
     build_category_choice_keyboard,
     build_place_results_keyboard,
 )
+from app.presentation.telegram.prompts import with_cancel_hint
 from app.presentation.telegram.states import NearbyPlace
 
 router = Router(name="find_place")
@@ -53,7 +54,7 @@ ASK_QUERY_MESSAGE = (
 )
 # Both carry the driver's own radius: the search is only as wide as the
 # setting they may never have opened.
-NEARBY_PROMPT_TEMPLATE = (
+NEARBY_PROMPT_TEMPLATE = with_cancel_hint(
     "Lokatsiyangizni yuboring — {radius_km} km radiusdagi qo'shilgan "
     "joylarni ko'rsataman."
 )
@@ -100,7 +101,7 @@ def overview_legend(places: list) -> str:
 NEARBY_EMPTY_TEMPLATE = (
     "{radius_km} km ichida joy topilmadi — ⚙️ Sozlamalardan radiusni oshiring."
 )
-NOT_A_LOCATION_MESSAGE = (
+NOT_A_LOCATION_MESSAGE = with_cancel_hint(
     "Buni lokatsiya sifatida o'qiy olmadim. Telegram lokatsiyasini yuboring."
 )
 INVALID_SELECTION_MESSAGE = "Tanlov eskirgan. Qayta qidirib ko'ring."

@@ -20,6 +20,7 @@ from app.presentation.telegram.errors import (
 from app.domain.interfaces.links import LinkResolver
 from app.presentation.telegram.formatters import format_place_card
 from app.presentation.telegram.location_resolution import coordinates_from_message
+from app.presentation.telegram.prompts import with_cancel_hint
 from app.presentation.telegram.states import EditPlace
 from app.presentation.telegram.notifications import announce_owner_deletion
 from app.presentation.telegram.keyboards.places import (
@@ -42,14 +43,16 @@ INVALID_SELECTION_MESSAGE = "Tanlov eskirgan. 📒 Mening joylarim dan qaytadan 
 DELETED_MESSAGE = "🗑 O'chirildi."
 CANCELLED_MESSAGE = "O'chirish bekor qilindi."
 DATABASE_ERROR_MESSAGE = "Baza bilan muammo. Birozdan so'ng urinib ko'ring."
-ASK_NEW_NAME_MESSAGE = "Yangi nomini yozing."
-BLANK_NAME_MESSAGE = "Nom bo'sh bo'lmasligi kerak. Yangi nomini yozing."
-ASK_NEW_NOTE_MESSAGE = "Yangi izohni yozing. Izohni olib tashlash uchun /skip."
-ASK_NEW_LOCATION_MESSAGE = (
+ASK_NEW_NAME_MESSAGE = with_cancel_hint("Yangi nomini yozing.")
+BLANK_NAME_MESSAGE = with_cancel_hint("Nom bo'sh bo'lmasligi kerak. Yangi nomini yozing.")
+ASK_NEW_NOTE_MESSAGE = with_cancel_hint(
+    "Yangi izohni yozing. Izohni olib tashlash uchun /skip."
+)
+ASK_NEW_LOCATION_MESSAGE = with_cancel_hint(
     "Yangi lokatsiyani yuboring — Telegram lokatsiyasi, xarita linki "
     "yoki koordinata: 55.75, 37.61"
 )
-NOT_A_LOCATION_MESSAGE = (
+NOT_A_LOCATION_MESSAGE = with_cancel_hint(
     "Buni lokatsiya sifatida o'qiy olmadim. "
     "Lokatsiya, xarita linki yoki koordinata yuboring."
 )

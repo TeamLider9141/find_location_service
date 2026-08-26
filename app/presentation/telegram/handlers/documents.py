@@ -34,6 +34,7 @@ from app.presentation.telegram.errors import (
     user_id_of,
 )
 from app.presentation.telegram.formatters import place_map_link
+from app.presentation.telegram.prompts import with_cancel_hint
 from app.presentation.telegram.keyboards.documents import (
     build_document_preview_keyboard,
     build_documents_page_keyboard,
@@ -63,27 +64,31 @@ NO_PLACES_MESSAGE = (
     "Bazada hali manzil yo'q — hujjatni biriktirishga joy topilmadi.\n"
     "Avval ➕ Joy qo'shish orqali manzil qo'shing."
 )
-ATTACH_PLACE_MESSAGE = "Manzil ulash — hujjat qaysi manzilga tegishli? Ro'yxatdan tanlang:"
+ATTACH_PLACE_MESSAGE = with_cancel_hint(
+    "Manzil ulash — hujjat qaysi manzilga tegishli? Ro'yxatdan tanlang:"
+)
 # The name carries the map link so the driver can check they picked the right
 # place before writing anything; the place's own note rides under it.
-PLACE_CHOSEN_TEMPLATE = (
+PLACE_CHOSEN_TEMPLATE = with_cancel_hint(
     '✅ Manzil tanlandi: <a href="{link}">{name}</a>\n'
     "{note_line}\n"
     "Endi unga hujjat biriktirish uchun izoh yozing — hujjat turlari, "
     "nimalar kerakligi ({limit} so'zgacha).\n"
     "Rasm (png/jpg) yoki hujjat (pdf, doc, docx) ham tashlashingiz mumkin."
 )
-FILE_RECEIVED_MESSAGE = "📎 Hujjat tashlandi. Endi tagiga izoh yozing."
+FILE_RECEIVED_MESSAGE = with_cancel_hint("📎 Hujjat tashlandi. Endi tagiga izoh yozing.")
 FILE_REPLACED_MESSAGE = "📎 Hujjat almashtirildi."
-UNSUPPORTED_FILE_MESSAGE = (
+UNSUPPORTED_FILE_MESSAGE = with_cancel_hint(
     "Bu turdagi fayl qabul qilinmaydi. "
     "Rasm (png/jpg) yoki pdf, doc, docx hujjat yuboring."
 )
-NOTE_TOO_LONG_TEMPLATE = "Izoh {limit} so'zdan oshmasin. Qisqartirib yozing."
-BLANK_NOTE_MESSAGE = "Izoh bo'sh bo'lmasligi kerak. Hujjat haqida yozing."
+NOTE_TOO_LONG_TEMPLATE = with_cancel_hint(
+    "Izoh {limit} so'zdan oshmasin. Qisqartirib yozing."
+)
+BLANK_NOTE_MESSAGE = with_cancel_hint("Izoh bo'sh bo'lmasligi kerak. Hujjat haqida yozing.")
 PREVIEW_MESSAGE = "Namunaviy hujjat ko'rinishi — saqlansa shunday ko'rinadi:"
-ASK_NEW_FILE_MESSAGE = "Yangi rasm yoki hujjat tashlang."
-ASK_NEW_NOTE_MESSAGE = "Yangi izoh yozing."
+ASK_NEW_FILE_MESSAGE = with_cancel_hint("Yangi rasm yoki hujjat tashlang.")
+ASK_NEW_NOTE_MESSAGE = with_cancel_hint("Yangi izoh yozing.")
 SAVED_MESSAGE = "✅ Hujjat saqlandi."
 UPDATED_MESSAGE = "✅ Yangilandi."
 NOT_YOURS_MESSAGE = "Bu hujjatni faqat uni qo'shgan foydalanuvchi o'zgartira oladi."

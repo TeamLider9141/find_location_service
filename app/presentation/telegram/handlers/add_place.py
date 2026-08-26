@@ -41,28 +41,33 @@ from app.presentation.telegram.keyboards.places import (
     build_preview_keyboard,
 )
 from app.presentation.telegram.notifications import announce_add_request
+from app.presentation.telegram.prompts import with_cancel_hint
 from app.presentation.telegram.states import AddPlace
 
 router = Router(name="add_place")
 
 # The flow, in the order the driver walks it: location first — it is the one
 # thing they have to be standing at — then category, name, note, and a preview
-# to look at before anything is written.
-ASK_LOCATION_MESSAGE = (
+# to look at before anything is written. Every prompt that waits for input
+# names the way out: a driver who tapped the wrong button mid-flow is stuck
+# behind a question they cannot answer otherwise.
+ASK_LOCATION_MESSAGE = with_cancel_hint(
     "Joy lokatsiyasini yuboring.\n\n"
     "📎 → Lokatsiya, yoki xarita linkini, yoki koordinatani yozing: 55.75, 37.61"
 )
-ASK_LOCATION_AGAIN_MESSAGE = (
+ASK_LOCATION_AGAIN_MESSAGE = with_cancel_hint(
     "Buni lokatsiya sifatida o'qiy olmadim. "
     "Telegram lokatsiyasini yuboring yoki koordinatani yozing: 55.75, 37.61"
 )
-ASK_CATEGORY_MESSAGE = (
+ASK_CATEGORY_MESSAGE = with_cancel_hint(
     "Kategoriyalarni tanlang — bir nechtasini belgilash mumkin.\n"
     "Bo'lgach ➡️ Davom etish tugmasini bosing."
 )
-ASK_NAME_MESSAGE = "Joy nomini yozing. Masalan: Газпром yoki Кафе У Дороги."
-BLANK_NAME_MESSAGE = "Nom bo'sh bo'lmasligi kerak. Joy nomini yozing."
-ASK_NOTE_MESSAGE = (
+ASK_NAME_MESSAGE = with_cancel_hint(
+    "Joy nomini yozing. Masalan: Газпром yoki Кафе У Дороги."
+)
+BLANK_NAME_MESSAGE = with_cancel_hint("Nom bo'sh bo'lmasligi kerak. Joy nomini yozing.")
+ASK_NOTE_MESSAGE = with_cancel_hint(
     "Izoh qo'shasizmi? Masalan: M5, 120-km, kechasi ochiq.\n"
     "Kerak bo'lmasa /skip yuboring."
 )
