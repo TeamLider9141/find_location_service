@@ -149,7 +149,7 @@ def test_user_detail_gathers_places_and_searches() -> None:
     add_place(places, user_id=1)
     users.record_search(1, "газпром")
 
-    detail = GetUserDetailUseCase(users, places).execute(1)
+    detail = GetUserDetailUseCase(users, places, InMemoryAddAccessRepository()).execute(1)
 
     assert detail is not None
     assert detail.user.full_name == "Ali"
@@ -158,7 +158,9 @@ def test_user_detail_gathers_places_and_searches() -> None:
 
 
 def test_user_detail_of_a_stranger_is_none() -> None:
-    detail = GetUserDetailUseCase(InMemoryUserRepository(), InMemoryPlaceRepository()).execute(9)
+    detail = GetUserDetailUseCase(
+        InMemoryUserRepository(), InMemoryPlaceRepository(), InMemoryAddAccessRepository()
+    ).execute(9)
 
     assert detail is None
 
@@ -418,3 +420,18 @@ def test_a_days_old_request_leaves_the_user_list_unmarked() -> None:
 
     assert [row.user.full_name for row in page.rows] == ["Busy", "Forgotten"]
     assert [row.awaiting for row in page.rows] == [False, False]
+
+
+def test_user_detail_reports_their_add_access_standing() -> None:
+    users = InMemoryUserRepository()
+    access = InMemoryAddAccessRepository()
+    users.record_seen(1, full_name="Ali", username=None)
+    users.record_seen(2, full_name="Vali", username=None)
+    access.set_status(1, AddAccessStatus.APPROVED)
+    access.set_status(2, AddAccessStatus.PENDING)
+
+    detail_of = GetUserDetailUseCase(users, InMemoryPlaceRepository(), access)
+
+    assert detail_of.execute(1).may_add is True
+    # Pending is a question, not a right.
+    assert detail_of.execute(2).may_add is False

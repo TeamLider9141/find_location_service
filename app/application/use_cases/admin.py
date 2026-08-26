@@ -54,6 +54,7 @@ class UserDetail:
     user: BotUser
     places: list[Place]
     searches: int
+    may_add: bool = False
 
 
 @dataclass(frozen=True)
@@ -176,9 +177,12 @@ def _user_rank(row: UserRow) -> tuple[int, int, float, int]:
 
 
 class GetUserDetailUseCase:
-    def __init__(self, users: UserRepository, places: PlaceRepository) -> None:
+    def __init__(
+        self, users: UserRepository, places: PlaceRepository, access: AddAccessRepository
+    ) -> None:
         self._users = users
         self._places = places
+        self._access = access
 
     def execute(self, user_id: int) -> UserDetail | None:
         user = self._users.get(user_id)
@@ -189,6 +193,7 @@ class GetUserDetailUseCase:
             user=user,
             places=self._places.list_by_author(user_id),
             searches=self._users.search_count(user_id),
+            may_add=self._access.status(user_id) == AddAccessStatus.APPROVED,
         )
 
 

@@ -81,6 +81,9 @@ class FakeMessage:
     async def answer(self, text: str, **kwargs: object) -> None:
         self.answers.append({"text": text, **kwargs})
 
+    async def edit_text(self, text: str, **kwargs: object) -> None:
+        self.answers.append({"text": text, "edited": True, **kwargs})
+
     @property
     def texts(self) -> list[str]:
         return [str(answer["text"]) for answer in self.answers]
@@ -305,7 +308,7 @@ async def test_a_user_detail_shows_their_places(places, users) -> None:
         callback,
         admin_ids=ADMIN_IDS,
         super_admin_ids=ADMIN_IDS,
-        user_detail=GetUserDetailUseCase(users, places),
+        user_detail=GetUserDetailUseCase(users, places, InMemoryAddAccessRepository()),
     )
 
     assert "Газпром" in callback.texts[0]
@@ -318,7 +321,7 @@ async def test_an_unknown_user_is_reported(places, users) -> None:
         callback,
         admin_ids=ADMIN_IDS,
         super_admin_ids=ADMIN_IDS,
-        user_detail=GetUserDetailUseCase(users, places),
+        user_detail=GetUserDetailUseCase(users, places, InMemoryAddAccessRepository()),
     )
 
     assert callback.alerts == [UNKNOWN_USER_MESSAGE]
@@ -844,7 +847,7 @@ async def test_the_ordinary_rung_cannot_open_a_super_admins_detail(places, users
         callback,
         admin_ids=BOTH_RUNGS,
         super_admin_ids=ADMIN_IDS,
-        user_detail=GetUserDetailUseCase(users, places),
+        user_detail=GetUserDetailUseCase(users, places, InMemoryAddAccessRepository()),
     )
 
     assert callback.alerts == [SUPER_ADMIN_ONLY_MESSAGE]
@@ -859,7 +862,7 @@ async def test_a_super_admin_opens_their_own_detail(places, users) -> None:
         callback,
         admin_ids=BOTH_RUNGS,
         super_admin_ids=ADMIN_IDS,
-        user_detail=GetUserDetailUseCase(users, places),
+        user_detail=GetUserDetailUseCase(users, places, InMemoryAddAccessRepository()),
     )
 
     assert "Super" in callback.texts[0]
@@ -1234,3 +1237,89 @@ async def test_revoking_takes_the_document_button_back() -> None:
     )
 
     assert ADD_DOCUMENT_BUTTON not in _menu_labels(bot.markups[0])
+
+
+async def test_turning_the_page_edits_the_list_in_place(places, users) -> None:
+    # Ten arrow taps must not leave ten lists in the chat.
+    for user_id in range(1, 8):
+        users.record_seen(user_id, full_name=f"User {user_id}", username=None)
+    callback = FakeCallbackQuery("admin:users:1")
+    callback.message.text = "👥 Foydalanuvchilar — 7 ta"
+
+    await handle_admin_users(
+        callback,
+        admin_ids=ADMIN_IDS,
+        super_admin_ids=ADMIN_IDS,
+        list_users_page=ListUsersPageUseCase(users, places, InMemoryAddAccessRepository()),
+    )
+
+    assert callback.message.answers[0].get("edited") is True
+    assert "Sahifa 2" in callback.texts[0]
+
+
+async def test_the_first_open_still_sends_a_fresh_list(places, users) -> None:
+    users.record_seen(1, full_name="Ali", username=None)
+    callback = FakeCallbackQuery("admin:users:0")
+    callback.message.text = "Admin menyu"
+
+    await handle_admin_users(
+        callback,
+        admin_ids=ADMIN_IDS,
+        super_admin_ids=ADMIN_IDS,
+        list_users_page=ListUsersPageUseCase(users, places, InMemoryAddAccessRepository()),
+    )
+
+    assert callback.message.answers[0].get("edited") is None
+
+
+async def test_granting_from_the_user_detail_approves_and_tells_the_driver() -> None:
+    from app.presentation.telegram.handlers.admin import handle_grant_add
+
+    access = InMemoryAddAccessRepository()
+    bot = FakeBot()
+
+    await handle_grant_add(
+        FakeCallbackQuery("admin:grant_add:7"),
+        ADMIN_IDS,
+        ADMIN_IDS,
+        DecideAddAccessUseCase(access),
+        bot,
+    )
+
+    assert access.status(7) == AddAccessStatus.APPROVED
+    assert bot.sent[0][0] == 7
+    assert ADD_DOCUMENT_BUTTON in _menu_labels(bot.markups[0])
+
+
+async def test_the_detail_names_role_and_standing(places, users) -> None:
+    users.record_seen(7, full_name="Ali", username="ali")
+    access = InMemoryAddAccessRepository()
+    access.set_status(7, AddAccessStatus.APPROVED)
+    callback = FakeCallbackQuery("admin:user:7")
+
+    await handle_admin_user_detail(
+        callback,
+        admin_ids=ADMIN_IDS,
+        super_admin_ids=ADMIN_IDS,
+        user_detail=GetUserDetailUseCase(users, places, access),
+    )
+
+    text = callback.texts[0]
+    assert "Hozirgi role: Oddiy user" in text
+    assert "ruxsati ✅ bor" in text
+
+
+async def test_an_admins_detail_names_their_rung(places, users) -> None:
+    users.record_seen(ADMIN_ID, full_name="Boss", username=None)
+    callback = FakeCallbackQuery(f"admin:user:{ADMIN_ID}")
+
+    await handle_admin_user_detail(
+        callback,
+        admin_ids=ADMIN_IDS,
+        super_admin_ids=ADMIN_IDS,
+        user_detail=GetUserDetailUseCase(users, places, InMemoryAddAccessRepository()),
+    )
+
+    text = callback.texts[0]
+    assert "Hozirgi role: Super admin" in text
+    assert "ruxsati ❗️ yo'q" in text

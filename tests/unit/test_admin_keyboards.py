@@ -105,12 +105,40 @@ def test_a_user_detail_returns_to_the_list() -> None:
     assert "admin:users:2" in data
 
 
-def test_a_user_detail_offers_to_revoke_add_access() -> None:
-    # Present even for a user who never asked: revoking them is a harmless
-    # no-op, and the admin should not have to check first.
-    data = callbacks(build_user_detail_keyboard([], user_id=7))
+def test_an_access_holders_detail_offers_to_revoke() -> None:
+    data = callbacks(build_user_detail_keyboard([], user_id=7, may_add=True))
 
     assert "admin:revoke_add:7" in data
+    assert "admin:grant_add:7" not in data
+
+
+def test_everyone_elses_detail_offers_to_grant() -> None:
+    # One button, matching the standing: granting an approved driver again or
+    # revoking a stranger would both be no-ops dressed as actions.
+    data = callbacks(build_user_detail_keyboard([], user_id=7))
+
+    assert "admin:grant_add:7" in data
+    assert "admin:revoke_add:7" not in data
+
+
+def button_labels(keyboard) -> list[str]:
+    return [button.text for row in keyboard.inline_keyboard for button in row]
+
+
+def test_an_access_holders_button_carries_the_pin() -> None:
+    # The button is what the admin actually taps, so it answers the same
+    # question as the list text above it.
+    rows = [
+        UserRow(user=make_user(1, "Allowed"), places=0, may_add=True),
+        UserRow(user=make_user(2, "Waiting"), places=0, awaiting=True),
+        UserRow(user=make_user(3, "Plain"), places=0),
+    ]
+
+    labels = button_labels(build_users_page_keyboard(page(rows, total=3)))
+
+    assert labels[0].startswith("📍 ")
+    assert labels[1].startswith("👁‍🗨 ")
+    assert not labels[2].startswith(("📍", "👁‍🗨"))
 
 
 def test_broadcast_confirmation_offers_send_and_cancel() -> None:

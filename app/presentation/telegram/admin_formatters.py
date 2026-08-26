@@ -85,14 +85,16 @@ def format_users_page(page: UsersPage) -> str:
     first_number = page.page * page.page_size + 1
     for index, row in enumerate(page.rows, start=first_number):
         lines.append(
-            f"{index}) {_standing_mark(row)}{_user_label(row.user)} — {row.places} ta joy"
+            f"{index}) {standing_mark(row)}{_user_label(row.user)} — {row.places} ta joy"
             f" | oxirgi faollik: {_format_stamp(row.user.last_seen_at)}"
         )
 
     return "\n".join(lines)
 
 
-def _standing_mark(row: UserRow) -> str:
+def standing_mark(row: UserRow) -> str:
+    """The 📍/👁‍🗨 prefix a row earns — shared with the inline buttons, so the
+    list and the keyboard under it cannot disagree about who holds what."""
     if row.may_add:
         return f"{ADD_ACCESS_MARK} "
     if row.awaiting:
@@ -100,14 +102,21 @@ def _standing_mark(row: UserRow) -> str:
     return ""
 
 
-def format_user_detail(detail: UserDetail) -> str:
+ACCESS_YES_LABEL = "✅ bor"
+ACCESS_NO_LABEL = "❗️ yo'q"
+
+
+def format_user_detail(detail: UserDetail, role_label: str = "Oddiy user") -> str:
     # Sent with parse_mode="HTML" so the place names can carry their map links.
     # Names — the user's and the places' — are input, so they are escaped: one
     # "<" would make Telegram refuse the whole message.
     user = detail.user
+    access = ACCESS_YES_LABEL if detail.may_add else ACCESS_NO_LABEL
     lines = [
         f"👤 {html.escape(_user_label(user))}",
         f"ID: {user.id}",
+        f"Hozirgi role: {role_label}",
+        f"Holati: manzil qo'shishga ruxsati {access}",
         f"Birinchi marta: {_format_stamp(user.first_seen_at)}",
         f"Oxirgi faollik: {_format_stamp(user.last_seen_at)}",
         f"Qidiruvlari: {detail.searches} ta",

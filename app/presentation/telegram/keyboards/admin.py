@@ -2,6 +2,7 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from app.application.use_cases.admin import UsersPage
 from app.domain.entities.place import Place
+from app.presentation.telegram.admin_formatters import standing_mark
 
 USERS_PAGE_SIZE = 5
 
@@ -20,10 +21,12 @@ def build_admin_menu_keyboard() -> InlineKeyboardMarkup:
 
 
 def build_users_page_keyboard(page: UsersPage) -> InlineKeyboardMarkup:
+    # The same 📍/👁‍🗨 mark as the list text: the button is what the admin
+    # actually taps, so it has to answer the same question at a glance.
     rows = [
         [
             InlineKeyboardButton(
-                text=f"{row.user.full_name} — {row.places} ta joy",
+                text=f"{standing_mark(row)}{row.user.full_name} — {row.places} ta joy",
                 callback_data=f"admin:user:{row.user.id}",
             )
         ]
@@ -49,7 +52,7 @@ def build_users_page_keyboard(page: UsersPage) -> InlineKeyboardMarkup:
 
 
 def build_user_detail_keyboard(
-    places: list[Place], user_id: int, page: int = 0
+    places: list[Place], user_id: int, page: int = 0, may_add: bool = False
 ) -> InlineKeyboardMarkup:
     rows = [
         [
@@ -60,16 +63,26 @@ def build_user_detail_keyboard(
         ]
         for place in places
     ]
-    # Offered for every user, approved or not: revoking someone who never asked
-    # is a harmless no-op, and the admin should not have to check first.
-    rows.append(
-        [
-            InlineKeyboardButton(
-                text="🚫 Joy qo'shish ruxsatini olib tashlash",
-                callback_data=f"admin:revoke_add:{user_id}",
-            )
-        ]
-    )
+    # One button, matching the standing: granting an approved driver again or
+    # revoking a stranger would both be no-ops dressed as actions.
+    if may_add:
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    text="🚫 Joy qo'shish ruxsatini olib tashlash",
+                    callback_data=f"admin:revoke_add:{user_id}",
+                )
+            ]
+        )
+    else:
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    text="✅ Joy qo'shish ruxsatini berish",
+                    callback_data=f"admin:grant_add:{user_id}",
+                )
+            ]
+        )
     rows.append(
         [InlineKeyboardButton(text="⬅ Ro'yxatga", callback_data=f"admin:users:{max(page, 0)}")]
     )

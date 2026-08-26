@@ -355,3 +355,21 @@ def test_the_user_list_marks_who_is_waiting_for_an_answer() -> None:
     assert "👁‍🗨" in waiting
     assert "📍" not in waiting
     assert "👁‍🗨" not in reader
+
+
+def test_the_detail_carries_role_and_access_lines() -> None:
+    detail = UserDetail(user=make_user(), places=[], searches=0, may_add=True)
+
+    text = format_user_detail(detail, role_label="Admin")
+
+    assert "Hozirgi role: Admin" in text
+    assert "Holati: manzil qo'shishga ruxsati ✅ bor" in text
+
+
+def test_a_user_without_access_reads_as_such() -> None:
+    detail = UserDetail(user=make_user(), places=[], searches=0)
+
+    text = format_user_detail(detail)
+
+    assert "Hozirgi role: Oddiy user" in text
+    assert "ruxsati ❗️ yo'q" in text

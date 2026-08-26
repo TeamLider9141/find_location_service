@@ -166,7 +166,22 @@ async def handle_admin_users(
         await callback_query.answer()
         return
 
-    await message.answer(format_users_page(page), reply_markup=build_users_page_keyboard(page))
+    text = format_users_page(page)
+    markup = build_users_page_keyboard(page)
+
+    # An arrow tap turns the page in place; only the first open — arriving
+    # from the menu, whose message is not the list — sends a fresh message.
+    # Ten taps must not leave ten lists in the chat.
+    current = getattr(message, "text", None)
+    if current and current.startswith("👥"):
+        try:
+            await message.edit_text(text, reply_markup=markup)
+            await callback_query.answer()
+            return
+        except TelegramAPIError as error:
+            report_service_error(error, "user list page turn")
+
+    await message.answer(text, reply_markup=markup)
     await callback_query.answer()
 
 
@@ -205,12 +220,26 @@ async def handle_admin_user_detail(
         return
 
     await message.answer(
-        format_user_detail(detail),
-        reply_markup=build_user_detail_keyboard(detail.places, user_id=detail.user.id),
+        format_user_detail(
+            detail, role_label=_role_label(user_id, admin_ids, super_admin_ids)
+        ),
+        reply_markup=build_user_detail_keyboard(
+            detail.places, user_id=detail.user.id, may_add=detail.may_add
+        ),
         parse_mode="HTML",
         disable_web_page_preview=True,
     )
     await callback_query.answer()
+
+
+def _role_label(
+    user_id: int, admin_ids: tuple[int, ...], super_admin_ids: tuple[int, ...]
+) -> str:
+    if user_id in super_admin_ids:
+        return "Super admin"
+    if user_id in admin_ids:
+        return "Admin"
+    return "Oddiy user"
 
 
 @router.callback_query(F.data == "admin:places")
@@ -476,6 +505,30 @@ async def handle_deny_add(
     )
 
 
+@router.callback_query(F.data.startswith("admin:grant_add:"))
+async def handle_grant_add(
+    callback_query: CallbackQuery,
+    admin_ids: tuple[int, ...],
+    super_admin_ids: tuple[int, ...],
+    decide_add_access: DecideAddAccessUseCase,
+    bot: Bot,
+) -> None:
+    """Hand out the right from the user detail, without waiting for a request.
+
+    The same grant as answering a request: the driver hears the same news and
+    their menu grows the same buttons.
+    """
+    await _decide_add_access(
+        callback_query,
+        admin_ids,
+        super_admin_ids,
+        decide_add_access,
+        bot,
+        allow=True,
+        prefix="admin:grant_add:",
+    )
+
+
 async def _decide_add_access(
     callback_query: CallbackQuery,
     admin_ids: tuple[int, ...],
@@ -483,12 +536,14 @@ async def _decide_add_access(
     decide_add_access: DecideAddAccessUseCase,
     bot: Bot,
     allow: bool,
+    prefix: str | None = None,
 ) -> None:
     message = await _open(callback_query, admin_ids)
     if message is None:
         return
 
-    prefix = "admin:allow_add:" if allow else "admin:deny_add:"
+    if prefix is None:
+        prefix = "admin:allow_add:" if allow else "admin:deny_add:"
     user_id = _parse_int(callback_query.data, prefix=prefix)
     if user_id is None:
         await callback_query.answer(INVALID_SELECTION_MESSAGE)
