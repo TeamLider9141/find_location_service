@@ -384,7 +384,11 @@ async def handle_duplicate_answer(
         await state.clear()
         await message.answer(
             CANCELLED_MESSAGE,
-            reply_markup=build_main_menu_keyboard(is_admin=is_admin(callback_query, admin_ids)),
+            # Whoever reaches this flow passed the add gate, and the document
+            # button rides on the same right.
+            reply_markup=build_main_menu_keyboard(
+                is_admin=is_admin(callback_query, admin_ids), can_add_documents=True
+            ),
         )
 
     await callback_query.answer()
@@ -399,7 +403,11 @@ async def _save(
 ) -> None:
     """Write the place the preview promised. ``actor`` is whoever tapped —
     the message under a callback belongs to the bot, not the driver."""
-    menu = build_main_menu_keyboard(is_admin=is_admin(actor, admin_ids))
+    # Whoever reaches this flow passed the add gate, and the document button
+    # rides on the same right.
+    menu = build_main_menu_keyboard(
+        is_admin=is_admin(actor, admin_ids), can_add_documents=True
+    )
     data = await state.get_data()
     user_id = user_id_of(actor)
     if user_id is None:

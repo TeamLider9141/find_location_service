@@ -1,5 +1,10 @@
 import sqlite3
 
+from app.application.use_cases.access import HasAddAccessUseCase as _HasAdd
+from app.infrastructure.repositories.in_memory_add_access import (
+    InMemoryAddAccessRepository as _AccessRepo,
+)
+
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.storage.base import StorageKey
 from aiogram.fsm.storage.memory import MemoryStorage
@@ -649,7 +654,12 @@ async def test_a_duplicate_answer_on_an_expired_message_clears_the_flow() -> Non
 async def test_cancel_clears_the_flow_at_any_step() -> None:
     state = await state_with(AddPlace.preview, **FULL_DATA)
 
-    await handle_global_cancel(FakeMessage(text="/cancel"), state, admin_ids=())
+    await handle_global_cancel(
+        FakeMessage(text="/cancel"),
+        state,
+        admin_ids=(),
+        has_add_access=_HasAdd(_AccessRepo()),
+    )
 
     assert await state.get_state() is None
     assert await state.get_data() == {}

@@ -1,8 +1,10 @@
 from app.presentation.telegram.keyboards.menu import (
+    ADD_DOCUMENT_BUTTON,
     ADD_PLACE_BUTTON,
     ADMIN_BUTTON,
     CANCEL_BUTTON,
-    MY_PLACES_BUTTON,
+    DOCUMENTS_BUTTON,
+    MY_DATA_BUTTON,
     NEARBY_BUTTON,
     SEARCH_BUTTON,
     SETTINGS_BUTTON,
@@ -10,16 +12,19 @@ from app.presentation.telegram.keyboards.menu import (
 )
 
 
-def test_main_menu_offers_every_entry_point() -> None:
-    keyboard = build_main_menu_keyboard()
+def labels_of(keyboard) -> list[str]:
+    return [button.text for row in keyboard.keyboard for button in row]
 
-    labels = [button.text for row in keyboard.keyboard for button in row]
+
+def test_main_menu_offers_every_entry_point() -> None:
+    labels = labels_of(build_main_menu_keyboard())
 
     assert labels == [
         SEARCH_BUTTON,
+        DOCUMENTS_BUTTON,
         NEARBY_BUTTON,
         ADD_PLACE_BUTTON,
-        MY_PLACES_BUTTON,
+        MY_DATA_BUTTON,
         SETTINGS_BUTTON,
     ]
 
@@ -29,24 +34,36 @@ def test_main_menu_resizes() -> None:
 
 
 def test_cancel_is_a_command_not_a_menu_button() -> None:
-    labels = [
-        button.text for row in build_main_menu_keyboard().keyboard for button in row
-    ]
-
-    assert CANCEL_BUTTON not in labels
+    assert CANCEL_BUTTON not in labels_of(build_main_menu_keyboard())
 
 
 def test_the_admin_button_is_hidden_from_ordinary_drivers() -> None:
     # The reply keyboard is drawn per driver, so a button everyone can see but
     # nobody except the admin can use would just be noise.
-    labels = [button.text for row in build_main_menu_keyboard().keyboard for button in row]
+    assert ADMIN_BUTTON not in labels_of(build_main_menu_keyboard())
 
+
+def test_an_admin_gets_the_panel_and_document_buttons() -> None:
+    labels = labels_of(build_main_menu_keyboard(is_admin=True))
+
+    assert labels[-2:] == [ADMIN_BUTTON, ADD_DOCUMENT_BUTTON]
+
+
+def test_an_approved_driver_gets_the_document_button_without_the_panel() -> None:
+    labels = labels_of(build_main_menu_keyboard(can_add_documents=True))
+
+    assert labels[-1] == ADD_DOCUMENT_BUTTON
     assert ADMIN_BUTTON not in labels
 
 
-def test_an_admin_gets_the_panel_button_in_the_menu() -> None:
-    keyboard = build_main_menu_keyboard(is_admin=True)
+def test_a_plain_driver_sees_neither_admin_nor_document_button() -> None:
+    labels = labels_of(build_main_menu_keyboard())
 
-    labels = [button.text for row in keyboard.keyboard for button in row]
+    assert ADD_DOCUMENT_BUTTON not in labels
+    assert ADMIN_BUTTON not in labels
 
-    assert labels[-1] == ADMIN_BUTTON
+
+def test_my_data_stays_visible_to_everyone() -> None:
+    # The section is locked behind the handler, not hidden: a driver should
+    # learn it exists and how to ask for access.
+    assert MY_DATA_BUTTON in labels_of(build_main_menu_keyboard())

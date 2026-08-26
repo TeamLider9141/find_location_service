@@ -31,6 +31,20 @@ class RequestAddAccessUseCase:
         return previous
 
 
+class HasAddAccessUseCase:
+    """Whether this driver already holds the right to add.
+
+    A read, not a request: asking must not file anything — the main menu asks
+    this for every driver just to decide which buttons to draw.
+    """
+
+    def __init__(self, access: AddAccessRepository) -> None:
+        self._access = access
+
+    def execute(self, user_id: int) -> bool:
+        return self._access.status(user_id) == AddAccessStatus.APPROVED
+
+
 class DecideAddAccessUseCase:
     """The admin answers a driver's request."""
 

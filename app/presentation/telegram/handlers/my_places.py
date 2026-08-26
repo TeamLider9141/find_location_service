@@ -21,7 +21,6 @@ from app.domain.interfaces.links import LinkResolver
 from app.presentation.telegram.formatters import format_place_card
 from app.presentation.telegram.location_resolution import coordinates_from_message
 from app.presentation.telegram.states import EditPlace
-from app.presentation.telegram.keyboards.menu import MY_PLACES_BUTTON
 from app.presentation.telegram.notifications import announce_owner_deletion
 from app.presentation.telegram.keyboards.places import (
     BORDER_GROUP_VALUE,
@@ -59,13 +58,17 @@ UPDATED_MESSAGE = "✅ Yangilandi."
 _EDIT_PLACE_KEY = "edit_place_id"
 
 
-@router.message(F.text == MY_PLACES_BUTTON)
+# Reached from inside "Mening ma'lumotlarim" — the gate on that section
+# already decided who gets this far, so the list itself only needs an owner.
+@router.callback_query(F.data == "my_data:places")
 async def handle_my_places(
-    message: Message,
+    callback_query: CallbackQuery,
     list_my_places: ListMyPlacesUseCase,
 ) -> None:
-    user_id = user_id_of(message)
-    if user_id is None:
+    user_id = user_id_of(callback_query)
+    message = answerable_message(callback_query)
+    if user_id is None or message is None:
+        await callback_query.answer(EXPIRED_MESSAGE)
         return
 
     try:
@@ -73,10 +76,12 @@ async def handle_my_places(
     except sqlite3.Error as error:
         report_service_error(error, "list my places")
         await message.answer(DATABASE_ERROR_MESSAGE)
+        await callback_query.answer()
         return
 
     if not places:
         await message.answer(EMPTY_MESSAGE)
+        await callback_query.answer()
         return
 
     # One message per place: the action buttons under a card target a single
@@ -86,6 +91,7 @@ async def handle_my_places(
             format_place_card(place),
             reply_markup=build_my_place_actions_keyboard(place.id),
         )
+    await callback_query.answer()
 
 
 @router.callback_query(F.data.startswith("my_place:category:"))

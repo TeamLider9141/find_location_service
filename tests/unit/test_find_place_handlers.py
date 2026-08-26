@@ -1,5 +1,10 @@
 import sqlite3
 
+from app.application.use_cases.access import HasAddAccessUseCase as _HasAdd
+from app.infrastructure.repositories.in_memory_add_access import (
+    InMemoryAddAccessRepository as _AccessRepo,
+)
+
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.storage.base import StorageKey
 from aiogram.fsm.storage.memory import MemoryStorage
@@ -482,7 +487,9 @@ async def test_nearby_cancel_returns_to_the_menu() -> None:
     await state.set_state(NearbyPlace.location)
     message = FakeMessage(text="/cancel")
 
-    await handle_global_cancel(message, state, admin_ids=())
+    await handle_global_cancel(
+        message, state, admin_ids=(), has_add_access=_HasAdd(_AccessRepo())
+    )
 
     assert await state.get_state() is None
     assert message.answers[0]["reply_markup"] is not None

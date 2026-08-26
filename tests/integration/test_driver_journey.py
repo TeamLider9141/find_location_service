@@ -9,7 +9,11 @@ row searchable.
 
 import pytest
 
-from app.application.use_cases.access import DecideAddAccessUseCase, RequestAddAccessUseCase
+from app.application.use_cases.access import (
+    DecideAddAccessUseCase,
+    HasAddAccessUseCase,
+    RequestAddAccessUseCase,
+)
 from app.application.use_cases.admin import RecordSearchUseCase
 from app.application.use_cases.places import (
     AddPlaceUseCase,
@@ -218,11 +222,12 @@ async def test_a_driver_only_manages_their_own_places(journey: Journey) -> None:
     await journey.add("Газпром", "fuel", STATION)
     await journey.add("Кафе М5", "cafe", CAFE, user_id=OTHER_DRIVER)
 
-    mine = FakeMessage()
+    # "Mening joylarim" now answers a tap inside "Mening ma'lumotlarim".
+    mine = FakeCallbackQuery("my_data:places")
     await handle_my_places(mine, journey.list_my_places)
 
-    assert "Газпром" in replies(mine)
-    assert "Кафе М5" not in replies(mine)
+    assert "Газпром" in replies(mine.message)
+    assert "Кафе М5" not in replies(mine.message)
 
 
 async def test_a_deleted_place_stops_being_searchable(journey: Journey) -> None:
@@ -258,7 +263,12 @@ async def test_cancelling_halfway_saves_nothing(journey: Journey) -> None:
     await handle_location(FakeLocationMessage(*STATION), journey.state)
     await handle_category(FakeCallbackQuery("add_place:category:fuel"), journey.state)
 
-    await handle_cancel(FakeMessage(text="/cancel"), journey.state, ())
+    await handle_cancel(
+        FakeMessage(text="/cancel"),
+        journey.state,
+        (),
+        has_add_access=HasAddAccessUseCase(journey.access),
+    )
 
     assert await journey.state.get_state() is None
     assert journey.list_my_places.execute(DRIVER) == []

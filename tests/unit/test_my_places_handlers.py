@@ -93,9 +93,10 @@ async def test_my_places_lists_only_my_contributions() -> None:
         categories=(PlaceCategory.CAFE,),
         coordinates=Coordinates(latitude=55.76, longitude=37.62),
     )
-    message = FakeMessage(user_id=42)
+    callback = FakeCallbackQuery("my_data:places", user_id=42)
+    message = callback.message
 
-    await handle_my_places(message, list_my_places=ListMyPlacesUseCase(repository))
+    await handle_my_places(callback, list_my_places=ListMyPlacesUseCase(repository))
 
     text = str(message.answers[0]["text"])
     assert "Газпром" in text
@@ -104,9 +105,10 @@ async def test_my_places_lists_only_my_contributions() -> None:
 
 async def test_my_places_offers_actions_on_each_of_my_places() -> None:
     repository, place = seeded()
-    message = FakeMessage(user_id=42)
+    callback = FakeCallbackQuery("my_data:places", user_id=42)
+    message = callback.message
 
-    await handle_my_places(message, list_my_places=ListMyPlacesUseCase(repository))
+    await handle_my_places(callback, list_my_places=ListMyPlacesUseCase(repository))
 
     keyboard = message.answers[0]["reply_markup"]
     callback_data = [row[0].callback_data for row in keyboard.inline_keyboard]
@@ -127,9 +129,10 @@ async def test_my_places_sends_one_card_per_place() -> None:
         categories=(PlaceCategory.FUEL,),
         coordinates=Coordinates(latitude=55.76, longitude=37.62),
     )
-    message = FakeMessage(user_id=42)
+    callback = FakeCallbackQuery("my_data:places", user_id=42)
+    message = callback.message
 
-    await handle_my_places(message, list_my_places=ListMyPlacesUseCase(repository))
+    await handle_my_places(callback, list_my_places=ListMyPlacesUseCase(repository))
 
     # One card each: the action buttons target a single place, so two places
     # cannot share one message.
@@ -137,10 +140,11 @@ async def test_my_places_sends_one_card_per_place() -> None:
 
 
 async def test_my_places_when_empty_explains_how_to_add() -> None:
-    message = FakeMessage(user_id=99)
+    callback = FakeCallbackQuery("my_data:places", user_id=99)
+    message = callback.message
 
     await handle_my_places(
-        message,
+        callback,
         list_my_places=ListMyPlacesUseCase(InMemoryPlaceRepository()),
     )
 
@@ -148,10 +152,11 @@ async def test_my_places_when_empty_explains_how_to_add() -> None:
 
 
 async def test_a_database_failure_while_listing_tells_the_driver() -> None:
-    message = FakeMessage(user_id=42)
+    callback = FakeCallbackQuery("my_data:places", user_id=42)
+    message = callback.message
 
     await handle_my_places(
-        message,
+        callback,
         list_my_places=ListMyPlacesUseCase(ExplodingRepository()),
     )
 

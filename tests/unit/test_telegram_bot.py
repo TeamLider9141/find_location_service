@@ -5,6 +5,7 @@ from aiogram.fsm.storage.memory import MemoryStorage
 from app.config.settings import Settings
 from app.infrastructure.repositories.in_memory_add_access import InMemoryAddAccessRepository
 from app.infrastructure.repositories.in_memory_deletions import InMemoryDeletionLog
+from app.infrastructure.repositories.in_memory_documents import InMemoryDocumentRepository
 from app.infrastructure.repositories.in_memory_places import InMemoryPlaceRepository
 from app.infrastructure.repositories.in_memory_users import InMemoryUserRepository
 from app.presentation.telegram.bot import create_bot, create_dispatcher
@@ -19,6 +20,7 @@ USERS = InMemoryUserRepository()
 SETTINGS = InMemoryUserSettingsStore()
 ACCESS = InMemoryAddAccessRepository()
 DELETIONS = InMemoryDeletionLog()
+DOCUMENTS = InMemoryDocumentRepository()
 ADMIN_IDS = (99,)
 SUPER_ADMIN_IDS = (98,)
 
@@ -32,6 +34,7 @@ def dispatcher() -> Dispatcher:
         throttle=ThrottleMiddleware(),
         add_access=ACCESS,
         deletions=DELETIONS,
+        documents_repository=DOCUMENTS,
         admin_ids=ADMIN_IDS,
         super_admin_ids=SUPER_ADMIN_IDS,
     )
@@ -62,6 +65,12 @@ def test_dispatcher_injects_every_place_dependency(dispatcher: Dispatcher) -> No
         "request_add_access",
         "decide_add_access",
         "revoke_add_access",
+        "has_add_access",
+        "add_document",
+        "list_documents_page",
+        "list_my_documents",
+        "get_document",
+        "update_document",
         "list_deletions",
         "link_resolver",
         "overview_map",
@@ -93,7 +102,15 @@ def test_find_place_router_is_registered_last(dispatcher: Dispatcher) -> None:
     names = [router.name for router in dispatcher.sub_routers]
 
     assert names[-1] == "find_place"
-    assert names == ["start", "admin", "settings", "add_place", "my_places", "find_place"]
+    assert names == [
+        "start",
+        "admin",
+        "settings",
+        "add_place",
+        "documents",
+        "my_places",
+        "find_place",
+    ]
 
 
 def test_dispatcher_keeps_state_for_the_add_place_wizard(

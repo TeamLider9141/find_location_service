@@ -24,12 +24,21 @@ from app.application.use_cases.places import (
 )
 from app.application.use_cases.access import (
     DecideAddAccessUseCase,
+    HasAddAccessUseCase,
     RequestAddAccessUseCase,
     RevokeAddAccessUseCase,
+)
+from app.application.use_cases.documents import (
+    AddDocumentUseCase,
+    GetDocumentUseCase,
+    ListDocumentsPageUseCase,
+    ListMyDocumentsUseCase,
+    UpdateDocumentUseCase,
 )
 from app.config.settings import Settings
 from app.domain.interfaces.add_access import AddAccessRepository
 from app.domain.interfaces.deletions import DeletionLog
+from app.domain.interfaces.documents import DocumentRepository
 from app.domain.interfaces.places import PlaceRepository
 from app.domain.interfaces.routing import RoadRouter
 from app.domain.interfaces.users import UserRepository
@@ -41,10 +50,18 @@ from app.infrastructure.routing.google_routes import GoogleRoutesRouter
 from app.infrastructure.routing.osrm import OsrmRouter
 from app.infrastructure.database.sqlite_add_access import SQLiteAddAccessRepository
 from app.infrastructure.database.sqlite_deletions import SQLiteDeletionLog
+from app.infrastructure.database.sqlite_documents import SQLiteDocumentRepository
 from app.infrastructure.database.sqlite_places import SQLitePlaceRepository
 from app.infrastructure.database.sqlite_user_settings import SQLiteUserSettingsStore
 from app.infrastructure.database.sqlite_users import SQLiteUserRepository
-from app.presentation.telegram.handlers import add_place, admin, find_place, my_places, start
+from app.presentation.telegram.handlers import (
+    add_place,
+    admin,
+    documents,
+    find_place,
+    my_places,
+    start,
+)
 from app.presentation.telegram.handlers import settings as settings_handlers
 from app.presentation.telegram.handlers.settings import UserSettingsStore
 from app.presentation.telegram.middlewares.throttling import ThrottleMiddleware
@@ -58,6 +75,7 @@ def create_dispatcher(
     throttle: ThrottleMiddleware,
     add_access: AddAccessRepository,
     deletions: DeletionLog,
+    documents_repository: DocumentRepository,
     admin_ids: tuple[int, ...] = (),
     super_admin_ids: tuple[int, ...] = (),
     road_router: RoadRouter | None = None,
@@ -88,6 +106,12 @@ def create_dispatcher(
         request_add_access=RequestAddAccessUseCase(add_access),
         decide_add_access=DecideAddAccessUseCase(add_access),
         revoke_add_access=RevokeAddAccessUseCase(add_access),
+        has_add_access=HasAddAccessUseCase(add_access),
+        add_document=AddDocumentUseCase(documents_repository, repository),
+        list_documents_page=ListDocumentsPageUseCase(documents_repository, repository),
+        list_my_documents=ListMyDocumentsUseCase(documents_repository, repository),
+        get_document=GetDocumentUseCase(documents_repository, repository),
+        update_document=UpdateDocumentUseCase(documents_repository, repository),
         admin_ids=all_admins,
         super_admin_ids=super_admin_ids,
         road_router=road_router,
@@ -109,6 +133,7 @@ def create_dispatcher(
     dispatcher.include_router(admin.router)
     dispatcher.include_router(settings_handlers.router)
     dispatcher.include_router(add_place.router)
+    dispatcher.include_router(documents.router)
     dispatcher.include_router(my_places.router)
     # find_place last: it owns the bare-text catch-all handler.
     dispatcher.include_router(find_place.router)
@@ -128,6 +153,11 @@ def create_place_repository(settings: Settings) -> PlaceRepository:
 def create_add_access_repository(settings: Settings) -> AddAccessRepository:
     # Same file again: a permission granted before a deploy must survive it.
     return SQLiteAddAccessRepository(settings.database_path)
+
+
+def create_document_repository(settings: Settings) -> DocumentRepository:
+    # Same file again: a document pinned before a deploy must survive it.
+    return SQLiteDocumentRepository(settings.database_path)
 
 
 def create_road_router(settings: Settings) -> RoadRouter | None:

@@ -13,10 +13,11 @@ from app.presentation.telegram.keyboards.categories import (
 def format_start_message() -> str:
     return (
         "Salom. Bu bot haydovchilar birga to'plagan manzillar bazasi.\n\n"
-        "🔎 Qidirish — nom yoki kategoriya bo'yicha topish.\n"
+        "🔎 Manzillar — nom yoki kategoriya bo'yicha topish.\n"
+        "🗂 Manzildagi hujjatlar — manzillarga biriktirilgan hujjatlar.\n"
         "📍 Yaqin atrofda — lokatsiya tashlang, yaqin joylarni ko'rsataman.\n"
         "➕ Joy qo'shish — o'zingiz bilgan joyni bazaga qo'shing.\n"
-        "📒 Mening joylarim — o'zingiz qo'shgan joylar.\n"
+        "📁 Mening ma'lumotlarim — o'zingiz qo'shgan joylar va hujjatlar.\n"
         "⚙️ Sozlamalar — radius va natijalar soni.\n\n"
         "Shunchaki nom yozsangiz ham qidiraman. Masalan: Домодедово аэропорт."
     )
