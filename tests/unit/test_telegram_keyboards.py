@@ -16,7 +16,7 @@ def labels_of(keyboard) -> list[str]:
     return [button.text for row in keyboard.keyboard for button in row]
 
 
-def test_main_menu_offers_every_entry_point() -> None:
+def test_main_menu_offers_every_open_entry_point() -> None:
     labels = labels_of(build_main_menu_keyboard())
 
     assert labels == [
@@ -24,7 +24,6 @@ def test_main_menu_offers_every_entry_point() -> None:
         DOCUMENTS_BUTTON,
         NEARBY_BUTTON,
         ADD_PLACE_BUTTON,
-        MY_DATA_BUTTON,
         SETTINGS_BUTTON,
     ]
 
@@ -63,7 +62,16 @@ def test_a_plain_driver_sees_neither_admin_nor_document_button() -> None:
     assert ADMIN_BUTTON not in labels
 
 
-def test_my_data_stays_visible_to_everyone() -> None:
-    # The section is locked behind the handler, not hidden: a driver should
-    # learn it exists and how to ask for access.
-    assert MY_DATA_BUTTON in labels_of(build_main_menu_keyboard())
+def test_my_data_is_hidden_from_a_plain_driver() -> None:
+    # Hidden, not locked: a section that only answers with a refusal is
+    # noise on a keyboard drawn per driver. The handler keeps its gate for
+    # keyboards drawn before the right was revoked.
+    assert MY_DATA_BUTTON not in labels_of(build_main_menu_keyboard())
+
+
+def test_my_data_appears_for_an_admin() -> None:
+    assert MY_DATA_BUTTON in labels_of(build_main_menu_keyboard(is_admin=True))
+
+
+def test_my_data_appears_for_an_approved_driver() -> None:
+    assert MY_DATA_BUTTON in labels_of(build_main_menu_keyboard(can_add_documents=True))
