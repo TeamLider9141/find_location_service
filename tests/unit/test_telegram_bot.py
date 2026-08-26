@@ -72,6 +72,7 @@ def test_dispatcher_injects_every_place_dependency(dispatcher: Dispatcher) -> No
         "get_document",
         "update_document",
         "count_documents_by_place",
+        "documents_for_places",
         "list_deletions",
         "link_resolver",
         "overview_map",

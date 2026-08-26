@@ -26,6 +26,13 @@ class DocumentRepository(Protocol):
         count query each.
         """
 
+    def list_for_places(self, place_ids: tuple[int, ...]) -> dict[int, list[PlaceDocument]]:
+        """Return the documents of each listed place, newest first per place.
+
+        One read for a whole results page; places without documents are simply
+        absent from the answer.
+        """
+
     def update(
         self,
         document_id: int,

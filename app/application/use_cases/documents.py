@@ -79,6 +79,18 @@ class AddDocumentUseCase:
         return DocumentCard(document=saved, place=place)
 
 
+class DocumentsForPlacesUseCase:
+    """The documents behind one page of search results, in one read."""
+
+    def __init__(self, documents: DocumentRepository) -> None:
+        self._documents = documents
+
+    def execute(self, place_ids: tuple[int, ...]) -> dict[int, list[PlaceDocument]]:
+        if not place_ids:
+            return {}
+        return self._documents.list_for_places(place_ids)
+
+
 class CountDocumentsByPlaceUseCase:
     """How many documents each place carries — what ranks the place picker."""
 

@@ -142,3 +142,21 @@ def test_documents_are_counted_per_place(repository) -> None:
 
 def test_an_empty_repository_counts_no_places(repository) -> None:
     assert repository.count_by_place() == {}
+
+
+def test_documents_are_grouped_per_listed_place(repository) -> None:
+    # One read for a whole results page, newest first inside each place.
+    old = add(repository, place_id=1, note="eski")
+    new = add(repository, place_id=1, note="yangi")
+    add(repository, place_id=2, note="boshqa joyniki")
+
+    grouped = repository.list_for_places((1, 3))
+
+    assert list(grouped.keys()) == [1]
+    assert [document.id for document in grouped[1]] == [new.id, old.id]
+
+
+def test_no_places_asked_means_no_documents_answered(repository) -> None:
+    add(repository, place_id=1)
+
+    assert repository.list_for_places(()) == {}

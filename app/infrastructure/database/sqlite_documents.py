@@ -98,6 +98,27 @@ class SQLiteDocumentRepository:
 
         return {int(row["place_id"]): int(row["total"]) for row in rows}
 
+    def list_for_places(self, place_ids: tuple[int, ...]) -> dict[int, list[PlaceDocument]]:
+        if not place_ids:
+            return {}
+
+        placeholders = ",".join("?" * len(place_ids))
+        with closing(self._connect()) as connection:
+            rows = connection.execute(
+                f"""
+                SELECT {_COLUMNS} FROM place_documents
+                WHERE place_id IN ({placeholders})
+                ORDER BY created_at DESC, id DESC
+                """,
+                place_ids,
+            ).fetchall()
+
+        grouped: dict[int, list[PlaceDocument]] = {}
+        for row in rows:
+            document = _map_row(row)
+            grouped.setdefault(document.place_id, []).append(document)
+        return grouped
+
     def update(
         self,
         document_id: int,

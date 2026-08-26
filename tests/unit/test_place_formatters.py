@@ -159,3 +159,63 @@ def test_every_result_offers_both_navigator_routes() -> None:
         '&destination=55.75,37.61&travelmode=driving"'
     ) in text
     assert "Marshrut:" in text
+
+
+def make_document(place_id=1, note="Tex passport kerak", file_kind=None):
+    from datetime import datetime
+
+    from app.domain.entities.place_document import PlaceDocument
+
+    return PlaceDocument(
+        id=1,
+        place_id=place_id,
+        added_by_user_id=42,
+        note=note,
+        file_id="F1" if file_kind else None,
+        file_kind=file_kind,
+        created_at=datetime(2026, 1, 2),
+    )
+
+
+def test_results_show_the_documents_pinned_to_a_place() -> None:
+    from app.domain.value_objects.attachment import AttachmentKind
+
+    place = make_place()
+    document = make_document(place_id=place.id, file_kind=AttachmentKind.PHOTO)
+
+    text = format_place_results([place], documents_by_place={place.id: [document]})
+
+    assert "📎 Rasm biriktirilgan" in text
+    assert "📁 Tex passport kerak" in text
+
+
+def test_a_place_without_documents_gets_no_document_lines() -> None:
+    text = format_place_results([make_place()], documents_by_place={})
+
+    assert "📁" not in text
+    assert "📎" not in text
+
+
+def test_the_place_note_wears_the_speech_mark_in_results() -> None:
+    text = format_place_results([make_place(note="M5, 120 км")])
+
+    assert "💬 M5, 120 км" in text
+
+
+def test_a_note_only_document_shows_no_attachment_line() -> None:
+    place = make_place()
+    document = make_document(place_id=place.id)
+
+    text = format_place_results([place], documents_by_place={place.id: [document]})
+
+    assert "📁 Tex passport kerak" in text
+    assert "📎" not in text
+
+
+def test_result_attachment_labels_match_the_document_card() -> None:
+    # Two copies by necessity — importing would close an import cycle — so a
+    # test keeps them in step instead.
+    from app.presentation.telegram.document_formatters import ATTACHMENT_LABELS
+    from app.presentation.telegram.formatters import RESULT_ATTACHMENT_LABELS
+
+    assert RESULT_ATTACHMENT_LABELS == ATTACHMENT_LABELS

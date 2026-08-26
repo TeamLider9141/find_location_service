@@ -6,6 +6,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
 from app.application.use_cases.admin import RecordSearchUseCase
+from app.application.use_cases.documents import DocumentsForPlacesUseCase
 from app.application.use_cases.places import (
     CountPlacesByCategoryUseCase,
     FindPlacesUseCase,
@@ -144,6 +145,7 @@ async def handle_category_browse(
     find_places: FindPlacesUseCase,
     user_settings: UserSettingsStore,
     count_places_by_category: CountPlacesByCategoryUseCase,
+    documents_for_places: DocumentsForPlacesUseCase | None = None,
 ) -> None:
     message = answerable_message(callback_query)
     if message is None:
@@ -175,7 +177,7 @@ async def handle_category_browse(
         await callback_query.answer()
         return
 
-    await _send_results(message, places)
+    await _send_results(message, places, documents_for_places=documents_for_places)
     await callback_query.answer()
 
 
@@ -241,6 +243,7 @@ async def handle_nearby_location(
     user_settings: UserSettingsStore,
     road_router: RoadRouter | None = None,
     link_resolver: LinkResolver | None = None,
+    documents_for_places: DocumentsForPlacesUseCase | None = None,
 ) -> None:
     coordinates = await coordinates_from_message(message, link_resolver)
     user_id = user_id_of(message)
@@ -277,7 +280,13 @@ async def handle_nearby_location(
         message, road_router, coordinates, places
     )
     limit = settings.result_limit
-    await _send_results(message, places[:limit], distances[:limit], note)
+    await _send_results(
+        message,
+        places[:limit],
+        distances[:limit],
+        note,
+        documents_for_places=documents_for_places,
+    )
 
 
 # Enough for the re-sort to matter, few enough for one routing request.
@@ -354,6 +363,7 @@ async def handle_text_query(
     find_places: FindPlacesUseCase,
     user_settings: UserSettingsStore,
     record_search: RecordSearchUseCase,
+    documents_for_places: DocumentsForPlacesUseCase | None = None,
 ) -> None:
     query = (message.text or "").strip()
     user_id = user_id_of(message)
@@ -377,16 +387,31 @@ async def handle_text_query(
         await message.answer(DATABASE_ERROR_MESSAGE)
         return
 
-    await _send_results(message, places)
+    await _send_results(message, places, documents_for_places=documents_for_places)
 
 
-async def _send_results(message, places, distances=None, distance_note=None) -> None:
+async def _send_results(
+    message, places, distances=None, distance_note=None, documents_for_places=None
+) -> None:
     if not places:
         await message.answer(format_place_results([]))
         return
 
+    # The papers pinned to these places ride along under each entry. Losing
+    # them to a database hiccup is not worth losing the results themselves.
+    documents_by_place = None
+    if documents_for_places is not None:
+        try:
+            documents_by_place = documents_for_places.execute(
+                tuple(place.id for place in places)
+            )
+        except sqlite3.Error as error:
+            report_service_error(error, "documents for results")
+
     await message.answer(
-        format_place_results(places, distances, distance_note),
+        format_place_results(
+            places, distances, distance_note, documents_by_place=documents_by_place
+        ),
         reply_markup=build_place_results_keyboard([place.id for place in places]),
         parse_mode="HTML",
         # Every result carries its own link already; ten link previews under

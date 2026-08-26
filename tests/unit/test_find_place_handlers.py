@@ -802,3 +802,32 @@ async def test_the_sketch_caption_carries_the_legend() -> None:
     caption = str(message.photos[0]["caption"])
     assert "🔴 F — ⛽" in caption
     assert "🟤 C — ☕" in caption
+
+
+async def test_search_results_carry_the_places_documents() -> None:
+    from app.application.use_cases.documents import (
+        AddDocumentUseCase,
+        DocumentsForPlacesUseCase,
+    )
+    from app.infrastructure.repositories.in_memory_documents import (
+        InMemoryDocumentRepository,
+    )
+
+    repository = seeded_repository()
+    place = repository.search(name="газпром")[0]
+    documents = InMemoryDocumentRepository()
+    AddDocumentUseCase(documents, repository).execute(
+        user_id=42, place_id=place.id, note="Tex passport va CMR"
+    )
+    message = FakeMessage(text="газпром")
+
+    await handle_text_query(
+        message,
+        FindPlacesUseCase(repository),
+        InMemoryUserSettingsStore(),
+        RecordSearchUseCase(InMemoryUserRepository()),
+        documents_for_places=DocumentsForPlacesUseCase(documents),
+    )
+
+    text = str(message.answers[0]["text"])
+    assert "📁 Tex passport va CMR" in text

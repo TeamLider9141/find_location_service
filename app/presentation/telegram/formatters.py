@@ -1,6 +1,8 @@
 import html
 
 from app.domain.entities.place import Place
+from app.domain.entities.place_document import PlaceDocument
+from app.domain.value_objects.attachment import AttachmentKind
 from app.domain.value_objects.category import PlaceCategory
 from app.domain.value_objects.coordinates import Coordinates
 from app.domain.value_objects.user_settings import UserSettings
@@ -109,10 +111,27 @@ ROAD_DISTANCE_NOTE = "yo'l bo'yicha, taxminan"
 STRAIGHT_DISTANCE_NOTE = "to'g'ri chiziq bo'yicha"
 
 
+# The same labels the document card uses — a test keeps the two copies in
+# step, the way the throttle defaults are checked against their middleware.
+# Imported directly they would close an import cycle: document_formatters
+# already reads place_map_link from here.
+RESULT_ATTACHMENT_LABELS = {
+    AttachmentKind.PHOTO: "📎 Rasm biriktirilgan",
+    AttachmentKind.FILE: "📎 Hujjat biriktirilgan",
+}
+RESULT_DOCUMENT_MARK = "📁"
+RESULT_NOTE_MARK = "💬"
+
+# A document note in the results is a pointer, not the reading copy — the
+# full text lives one tap away in the document list.
+RESULT_DOCUMENT_NOTE_CHARS = 160
+
+
 def format_place_results(
     places: list[Place],
     distances_meters: list[float] | None = None,
     distance_note: str | None = None,
+    documents_by_place: dict[int, list[PlaceDocument]] | None = None,
 ) -> str:
     if not places:
         return NO_RESULTS_MESSAGE
@@ -137,7 +156,16 @@ def format_place_results(
             suffix = f" · {distance_note}" if distance_note else ""
             lines.append(f"   {distance}{suffix}")
         if place.note:
-            lines.append(f"   📝 {html.escape(place.note)}")
+            lines.append(f"   {RESULT_NOTE_MARK} {html.escape(place.note)}")
+        # The papers pinned to this place, at the bottom of its entry: what is
+        # attached, and what the note says is needed there.
+        for document in (documents_by_place or {}).get(place.id, []):
+            if document.has_attachment:
+                lines.append(f"   {RESULT_ATTACHMENT_LABELS[document.file_kind]}")
+            lines.append(
+                f"   {RESULT_DOCUMENT_MARK} "
+                f"{html.escape(_shortened_note(document.note))}"
+            )
         # Our number is an estimate; these links are the navigators' own
         # routes. Both offered — drivers keep the one they already use.
         lines.append(
@@ -147,6 +175,12 @@ def format_place_results(
         lines.append("")
 
     return "\n".join(lines).rstrip()
+
+
+def _shortened_note(note: str) -> str:
+    if len(note) <= RESULT_DOCUMENT_NOTE_CHARS:
+        return note
+    return note[: RESULT_DOCUMENT_NOTE_CHARS - 1] + "…"
 
 
 def _format_distance(meters: float) -> str:

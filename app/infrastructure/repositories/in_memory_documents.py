@@ -41,6 +41,14 @@ class InMemoryDocumentRepository:
             counts[document.place_id] = counts.get(document.place_id, 0) + 1
         return counts
 
+    def list_for_places(self, place_ids: tuple[int, ...]) -> dict[int, list[PlaceDocument]]:
+        wanted = set(place_ids)
+        grouped: dict[int, list[PlaceDocument]] = {}
+        for document in self._newest_first(self._documents.values()):
+            if document.place_id in wanted:
+                grouped.setdefault(document.place_id, []).append(document)
+        return grouped
+
     def update(
         self,
         document_id: int,
