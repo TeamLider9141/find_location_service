@@ -8,6 +8,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import BufferedInputFile, CallbackQuery, Message
 
 from app.application.use_cases.access import DecideAddAccessUseCase, RevokeAddAccessUseCase
+from app.application.use_cases.documents import AdminDocumentsPageUseCase
 from app.application.use_cases.admin import (
     AdminPlacesByCategoryUseCase,
     DeletePlaceAsAdminUseCase,
@@ -21,6 +22,8 @@ from app.application.use_cases.admin import (
 from app.application.use_cases.places import CountPlacesByCategoryUseCase
 from app.domain.value_objects.category import PlaceCategory
 from app.presentation.telegram.admin_formatters import (
+    ADMIN_DOCUMENTS_HEADER,
+    format_admin_documents_page,
     format_admin_overview,
     format_admin_places,
     format_broadcast_preview,
@@ -43,8 +46,11 @@ from app.presentation.telegram.deletion_report import (
 )
 from app.presentation.telegram.keyboards.admin import (
     USERS_PAGE_SIZE,
+    add_back_row,
     build_admin_delete_confirmation_keyboard,
+    build_admin_documents_keyboard,
     build_admin_menu_keyboard,
+    build_back_keyboard,
     build_back_to_menu_keyboard,
     build_broadcast_confirmation_keyboard,
     build_deletion_log_keyboard,
@@ -242,6 +248,57 @@ def _role_label(
     return "Oddiy user"
 
 
+@router.callback_query(F.data.startswith("admin:documents:"))
+async def handle_admin_documents(
+    callback_query: CallbackQuery,
+    admin_ids: tuple[int, ...],
+    admin_documents_page: AdminDocumentsPageUseCase,
+) -> None:
+    """Every pinned document with its author, paged like the user list."""
+    message = await _open(callback_query, admin_ids)
+    if message is None:
+        return
+
+    page_number = _parse_int(callback_query.data, prefix="admin:documents:")
+    if page_number is None:
+        await callback_query.answer(INVALID_SELECTION_MESSAGE)
+        return
+
+    try:
+        page = admin_documents_page.execute(page=page_number)
+    except sqlite3.Error as error:
+        report_service_error(error, "admin documents page")
+        await message.answer(DATABASE_ERROR_MESSAGE)
+        await callback_query.answer()
+        return
+
+    text = format_admin_documents_page(page)
+    markup = (
+        build_admin_documents_keyboard(page)
+        if page.rows
+        else build_back_to_menu_keyboard()
+    )
+
+    # An arrow tap turns the page in place, as in the user list; only the
+    # first open — arriving from the menu — sends a fresh message.
+    current = getattr(message, "text", None)
+    if current and current.startswith(ADMIN_DOCUMENTS_HEADER):
+        try:
+            await message.edit_text(
+                text, reply_markup=markup, parse_mode="HTML",
+                disable_web_page_preview=True,
+            )
+            await callback_query.answer()
+            return
+        except TelegramAPIError as error:
+            report_service_error(error, "admin documents page turn")
+
+    await message.answer(
+        text, reply_markup=markup, parse_mode="HTML", disable_web_page_preview=True
+    )
+    await callback_query.answer()
+
+
 @router.callback_query(F.data == "admin:places")
 async def handle_admin_places(
     callback_query: CallbackQuery,
@@ -266,7 +323,10 @@ async def handle_admin_places(
 
     await message.answer(
         CHOOSE_CATEGORY_MESSAGE,
-        reply_markup=build_category_choice_keyboard("admin:places_cat", counts),
+        # Every nested page carries its ⬅️: the categories back to the menu.
+        reply_markup=add_back_row(
+            build_category_choice_keyboard("admin:places_cat", counts), "admin:home"
+        ),
     )
     await callback_query.answer()
 
@@ -294,7 +354,10 @@ async def handle_admin_places_category(
             counts = None
         await message.answer(
             CHOOSE_BORDER_MESSAGE,
-            reply_markup=build_border_choice_keyboard("admin:places_cat", counts),
+            # ⬅️ climbs one level: from the borders back to the categories.
+            reply_markup=add_back_row(
+                build_border_choice_keyboard("admin:places_cat", counts), "admin:places"
+            ),
         )
         await callback_query.answer()
         return
@@ -316,6 +379,8 @@ async def handle_admin_places_category(
 
     await message.answer(
         format_admin_places(category, groups),
+        # ⬅️ climbs one level: from a category's places back to the categories.
+        reply_markup=build_back_keyboard("admin:places"),
         parse_mode="HTML",
         disable_web_page_preview=True,
     )

@@ -74,6 +74,7 @@ def test_dispatcher_injects_every_place_dependency(dispatcher: Dispatcher) -> No
         "delete_document",
         "count_documents_by_place",
         "documents_for_places",
+        "admin_documents_page",
         "list_deletions",
         "link_resolver",
         "overview_map",

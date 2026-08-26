@@ -146,3 +146,31 @@ def test_broadcast_confirmation_offers_send_and_cancel() -> None:
 
     assert "admin:broadcast:send" in data
     assert "admin:broadcast:cancel" in data
+
+
+def test_the_menu_offers_the_documents_section() -> None:
+    assert "admin:documents:0" in callbacks(build_admin_menu_keyboard())
+
+
+def test_the_documents_page_walks_and_returns() -> None:
+    from app.application.use_cases.documents import AdminDocumentsPage
+    from app.presentation.telegram.keyboards.admin import build_admin_documents_keyboard
+
+    keyboard = build_admin_documents_keyboard(
+        AdminDocumentsPage(total=20, page=1, page_size=7, rows=[])
+    )
+    data = callbacks(keyboard)
+
+    assert "admin:documents:0" in data
+    assert "admin:documents:2" in data
+    assert "admin:home" in data
+
+
+def test_a_back_row_lands_under_any_keyboard() -> None:
+    from app.presentation.telegram.keyboards.admin import add_back_row
+
+    grown = add_back_row(build_admin_menu_keyboard(), "admin:home")
+
+    last = grown.inline_keyboard[-1][0]
+    assert last.text == "⬅️"
+    assert last.callback_data == "admin:home"

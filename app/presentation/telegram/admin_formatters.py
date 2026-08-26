@@ -9,6 +9,11 @@ from app.application.use_cases.admin import (
     UserRow,
     UsersPage,
 )
+from app.application.use_cases.documents import AdminDocumentsPage
+from app.presentation.telegram.document_formatters import (
+    ATTACHMENT_LABELS,
+    PLACE_GONE_LABEL,
+)
 from app.domain.entities.bot_user import BotUser
 from app.domain.value_objects.category import PlaceCategory
 from app.presentation.telegram.formatters import place_map_link
@@ -136,6 +141,53 @@ def format_user_detail(detail: UserDetail, role_label: str = "Oddiy user") -> st
             # Names arrive with their own newlines inside; without a separator
             # the entries read as one solid block.
             lines.append("")
+
+    return "\n".join(lines).rstrip()
+
+
+NO_ADMIN_DOCUMENTS_MESSAGE = "Hali hujjat qo'shilmagan."
+ADMIN_DOCUMENTS_HEADER = "📁 Hujjatlar"
+
+# The admin scans for who wrote what; the reading copy of a note lives in the
+# public document list, one tap away.
+ADMIN_DOCUMENT_NOTE_CHARS = 120
+
+
+def format_admin_documents_page(page: AdminDocumentsPage) -> str:
+    """Every pinned document with its author — sent with parse_mode="HTML"."""
+    if not page.rows:
+        return NO_ADMIN_DOCUMENTS_MESSAGE
+
+    total_pages = max(1, -(-page.total // page.page_size))
+    lines = [
+        f"{ADMIN_DOCUMENTS_HEADER} — {page.total} ta",
+        f"Sahifa {page.page + 1}/{total_pages}",
+        "",
+    ]
+    first_number = page.page * page.page_size + 1
+    for index, row in enumerate(page.rows, start=first_number):
+        if row.place is not None:
+            name = html.escape(row.place.name)
+            place_line = f'<a href="{place_map_link(row.place)}">{name}</a>'
+        else:
+            place_line = PLACE_GONE_LABEL
+        lines.append(f"{index}) {place_line}")
+
+        author = row.author
+        author_label = _author_label(
+            author.full_name if author else None,
+            author.username if author else None,
+            row.document.added_by_user_id,
+        )
+        lines.append(f"   👤 {html.escape(author_label)}")
+
+        if row.document.has_attachment:
+            lines.append(f"   {ATTACHMENT_LABELS[row.document.file_kind]}")
+        note = row.document.note
+        if len(note) > ADMIN_DOCUMENT_NOTE_CHARS:
+            note = note[: ADMIN_DOCUMENT_NOTE_CHARS - 1] + "…"
+        lines.append(f"   📁 {html.escape(note)}")
+        lines.append("")
 
     return "\n".join(lines).rstrip()
 

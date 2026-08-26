@@ -202,3 +202,23 @@ def test_a_stranger_is_refused_the_delete() -> None:
 
     assert not DeleteDocumentUseCase(documents).execute(saved.document.id, user_id=7)
     assert documents.get(saved.document.id) is not None
+
+
+def test_the_admin_page_names_each_documents_author() -> None:
+    from app.application.use_cases.documents import AdminDocumentsPageUseCase
+    from app.infrastructure.repositories.in_memory_users import InMemoryUserRepository
+
+    documents, places, place = seeded()
+    users = InMemoryUserRepository()
+    users.record_seen(42, full_name="Ali", username="ali")
+    add = AddDocumentUseCase(documents, places)
+    add.execute(user_id=42, place_id=place.id, note="ma'lum muallif")
+    add.execute(user_id=777, place_id=place.id, note="noma'lum muallif")
+
+    page = AdminDocumentsPageUseCase(documents, places, users).execute(page=0)
+
+    assert page.total == 2
+    # Newest first; the untracked author survives as None, not a crash.
+    assert page.rows[0].author is None
+    assert page.rows[1].author.full_name == "Ali"
+    assert all(row.place == place for row in page.rows)

@@ -7,10 +7,12 @@ same right as adding places: the admin's nod, checked at the handlers.
 from dataclasses import dataclass
 from datetime import datetime
 
+from app.domain.entities.bot_user import BotUser
 from app.domain.entities.place import Place
 from app.domain.entities.place_document import PlaceDocument
 from app.domain.interfaces.documents import DocumentRepository
 from app.domain.interfaces.places import PlaceRepository
+from app.domain.interfaces.users import UserRepository
 from app.domain.value_objects.attachment import AttachmentKind
 
 DOCUMENTS_PAGE_SIZE = 7
@@ -77,6 +79,62 @@ class AddDocumentUseCase:
             )
         )
         return DocumentCard(document=saved, place=place)
+
+
+@dataclass(frozen=True)
+class AdminDocumentRow:
+    """One document as the admin sees it: with its place and its author.
+
+    Either neighbour may be gone — a deleted place, an author from before
+    user tracking — and the document still deserves its line.
+    """
+
+    document: PlaceDocument
+    place: Place | None
+    author: BotUser | None
+
+
+@dataclass(frozen=True)
+class AdminDocumentsPage:
+    total: int
+    page: int
+    page_size: int
+    rows: list[AdminDocumentRow]
+
+
+class AdminDocumentsPageUseCase:
+    """The documents as the admin panel lists them — with who pinned each."""
+
+    def __init__(
+        self,
+        documents: DocumentRepository,
+        places: PlaceRepository,
+        users: UserRepository,
+    ) -> None:
+        self._documents = documents
+        self._places = places
+        self._users = users
+
+    def execute(self, page: int, page_size: int = DOCUMENTS_PAGE_SIZE) -> AdminDocumentsPage:
+        safe_page = max(page, 0)
+        safe_size = max(page_size, 1)
+        total, documents = self._documents.list_page(
+            offset=safe_page * safe_size, limit=safe_size
+        )
+
+        return AdminDocumentsPage(
+            total=total,
+            page=safe_page,
+            page_size=safe_size,
+            rows=[
+                AdminDocumentRow(
+                    document=document,
+                    place=self._places.get(document.place_id),
+                    author=self._users.get(document.added_by_user_id),
+                )
+                for document in documents
+            ],
+        )
 
 
 class DeleteDocumentUseCase:

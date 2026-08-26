@@ -373,3 +373,59 @@ def test_a_user_without_access_reads_as_such() -> None:
 
     assert "Hozirgi role: Oddiy user" in text
     assert "ruxsati ❗️ yo'q" in text
+
+
+def test_the_admin_documents_page_names_place_author_and_note() -> None:
+    from datetime import datetime as _dt
+
+    from app.application.use_cases.documents import AdminDocumentRow, AdminDocumentsPage
+    from app.domain.entities.place import Place
+    from app.domain.entities.place_document import PlaceDocument
+    from app.domain.value_objects.attachment import AttachmentKind
+    from app.domain.value_objects.category import PlaceCategory
+    from app.domain.value_objects.coordinates import Coordinates
+    from app.presentation.telegram.admin_formatters import format_admin_documents_page
+
+    place = Place(
+        id=1,
+        added_by_user_id=7,
+        name="Газпром",
+        categories=(PlaceCategory.FUEL,),
+        coordinates=Coordinates(latitude=55.75, longitude=37.61),
+        note="",
+        created_at=_dt(2026, 1, 1),
+    )
+    document = PlaceDocument(
+        id=5,
+        place_id=1,
+        added_by_user_id=7,
+        note="Tex passport kerak",
+        file_id="F1",
+        file_kind=AttachmentKind.PHOTO,
+        created_at=_dt(2026, 1, 2),
+    )
+    page = AdminDocumentsPage(
+        total=1,
+        page=0,
+        page_size=7,
+        rows=[AdminDocumentRow(document=document, place=place, author=make_user(7))],
+    )
+
+    text = format_admin_documents_page(page)
+
+    assert "📁 Hujjatlar — 1 ta" in text
+    assert ">Газпром</a>" in text
+    assert "👤 Ali (@ali)" in text
+    assert "📎 Rasm biriktirilgan" in text
+    assert "📁 Tex passport kerak" in text
+
+
+def test_an_empty_admin_documents_page_says_so() -> None:
+    from app.application.use_cases.documents import AdminDocumentsPage
+    from app.presentation.telegram.admin_formatters import format_admin_documents_page
+
+    text = format_admin_documents_page(
+        AdminDocumentsPage(total=0, page=0, page_size=7, rows=[])
+    )
+
+    assert "qo'shilmagan" in text

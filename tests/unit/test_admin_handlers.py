@@ -1083,7 +1083,12 @@ async def test_the_border_group_opens_in_the_location_browser(places, users) -> 
 
     keyboard = callback.message.answers[0]["reply_markup"]
     data = [row[0].callback_data for row in keyboard.inline_keyboard]
-    assert data == ["admin:places_cat:border_kz", "admin:places_cat:border_ru"]
+    # The ⬅️ climbs one level, back to the categories.
+    assert data == [
+        "admin:places_cat:border_kz",
+        "admin:places_cat:border_ru",
+        "admin:places",
+    ]
 
 
 # --- the deletion journal ---------------------------------------------------
@@ -1323,3 +1328,99 @@ async def test_an_admins_detail_names_their_rung(places, users) -> None:
     text = callback.texts[0]
     assert "Hozirgi role: Super admin" in text
     assert "ruxsati ❗️ yo'q" in text
+
+
+# --- the documents section ---------------------------------------------------
+
+
+def _documents_world():
+    from app.application.use_cases.documents import (
+        AddDocumentUseCase,
+        AdminDocumentsPageUseCase,
+    )
+    from app.infrastructure.repositories.in_memory_documents import (
+        InMemoryDocumentRepository,
+    )
+
+    places = InMemoryPlaceRepository()
+    users = InMemoryUserRepository()
+    documents = InMemoryDocumentRepository()
+    users.record_seen(7, full_name="Ali", username="ali")
+    place = seed_place(places, user_id=7)
+    AddDocumentUseCase(documents, places).execute(
+        user_id=7, place_id=place.id, note="Tex passport kerak"
+    )
+    return AdminDocumentsPageUseCase(documents, places, users)
+
+
+async def test_the_documents_section_lists_authors() -> None:
+    from app.presentation.telegram.handlers.admin import handle_admin_documents
+
+    callback = FakeCallbackQuery("admin:documents:0")
+
+    await handle_admin_documents(
+        callback, admin_ids=ADMIN_IDS, admin_documents_page=_documents_world()
+    )
+
+    text = callback.texts[0]
+    assert "Газпром" in text
+    assert "Ali" in text
+    assert "Tex passport kerak" in text
+
+
+async def test_a_stranger_cannot_open_the_documents_section() -> None:
+    from app.presentation.telegram.handlers.admin import handle_admin_documents
+
+    callback = FakeCallbackQuery("admin:documents:0", user_id=STRANGER_ID)
+
+    await handle_admin_documents(
+        callback, admin_ids=ADMIN_IDS, admin_documents_page=_documents_world()
+    )
+
+    assert callback.texts == []
+
+
+async def test_turning_the_documents_page_edits_in_place() -> None:
+    from app.presentation.telegram.handlers.admin import handle_admin_documents
+
+    callback = FakeCallbackQuery("admin:documents:0")
+    callback.message.text = "📁 Hujjatlar — 1 ta"
+
+    await handle_admin_documents(
+        callback, admin_ids=ADMIN_IDS, admin_documents_page=_documents_world()
+    )
+
+    assert callback.message.answers[0].get("edited") is True
+
+
+async def test_the_category_chooser_carries_a_back_arrow(places, users) -> None:
+    callback = FakeCallbackQuery("admin:places")
+
+    await handle_admin_places(
+        callback,
+        admin_ids=ADMIN_IDS,
+        super_admin_ids=ADMIN_IDS,
+        count_places_by_category=CountPlacesByCategoryUseCase(places),
+    )
+
+    keyboard = callback.message.answers[0]["reply_markup"]
+    last = keyboard.inline_keyboard[-1][0]
+    assert last.text == "⬅️"
+    assert last.callback_data == "admin:home"
+
+
+async def test_a_categorys_places_carry_a_back_arrow(places, users) -> None:
+    seed_place(places, user_id=7)
+    users.record_seen(7, full_name="Ali", username=None)
+    callback = FakeCallbackQuery("admin:places_cat:fuel")
+
+    await handle_admin_places_category(
+        callback,
+        admin_ids=ADMIN_IDS,
+        super_admin_ids=ADMIN_IDS,
+        admin_places_by_category=AdminPlacesByCategoryUseCase(places, users),
+        count_places_by_category=CountPlacesByCategoryUseCase(places),
+    )
+
+    keyboard = callback.message.answers[0]["reply_markup"]
+    assert keyboard.inline_keyboard[-1][0].callback_data == "admin:places"
