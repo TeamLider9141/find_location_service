@@ -51,7 +51,7 @@ from app.presentation.telegram.keyboards.admin import (
     build_user_detail_keyboard,
     build_users_page_keyboard,
 )
-from app.presentation.telegram.keyboards.menu import ADMIN_BUTTON
+from app.presentation.telegram.keyboards.menu import ADMIN_BUTTON, build_main_menu_keyboard
 from app.presentation.telegram.keyboards.places import (
     BORDER_GROUP_VALUE,
     CHOOSE_BORDER_MESSAGE,
@@ -508,9 +508,17 @@ async def _decide_add_access(
 
     # The driver is waiting on this. A driver who blocked the bot in the
     # meantime loses only their own answer, not the admin's confirmation.
+    # The verdict carries the driver's fresh menu: a granted right shows its
+    # button right away instead of waiting for the next /start.
     verdict = ACCESS_GRANTED_USER_MESSAGE if allow else ACCESS_DENIED_USER_MESSAGE
     try:
-        await bot.send_message(user_id, verdict)
+        await bot.send_message(
+            user_id,
+            verdict,
+            reply_markup=build_main_menu_keyboard(
+                is_admin=user_id in admin_ids, can_add_documents=allow
+            ),
+        )
     except TelegramAPIError as error:
         report_service_error(error, f"add access verdict to {user_id}")
 
@@ -584,9 +592,16 @@ async def handle_revoke_add(
         return
 
     # Told rather than left to find out: a driver whose next add silently asks
-    # for permission again would file it as a bug.
+    # for permission again would file it as a bug. The notice also redraws
+    # their menu without the document button — no /start needed.
     try:
-        await bot.send_message(user_id, ACCESS_REVOKED_USER_MESSAGE)
+        await bot.send_message(
+            user_id,
+            ACCESS_REVOKED_USER_MESSAGE,
+            reply_markup=build_main_menu_keyboard(
+                is_admin=user_id in admin_ids, can_add_documents=False
+            ),
+        )
     except TelegramAPIError as error:
         report_service_error(error, f"add access revoke notice to {user_id}")
 

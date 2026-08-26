@@ -57,6 +57,7 @@ from app.presentation.telegram.handlers.admin import (
     handle_place_delete_confirm,
     handle_place_delete_prompt,
 )
+from app.presentation.telegram.keyboards.menu import ADD_DOCUMENT_BUTTON
 from app.presentation.telegram.states import AdminBroadcast
 
 ADMIN_ID = 100
@@ -107,6 +108,7 @@ class FakeBot:
         flood: dict[int, int] | None = None,
     ) -> None:
         self.sent: list[tuple[int, str]] = []
+        self.markups: list[object] = []
         self.documents: list[tuple[int, str | None]] = []
         self._blocked = blocked or set()
         # chat id -> how many more times sending to it hits flood control.
@@ -115,7 +117,9 @@ class FakeBot:
     async def send_document(self, chat_id: int, document: object, **_: object) -> None:
         self.documents.append((chat_id, getattr(document, "filename", None)))
 
-    async def send_message(self, chat_id: int, text: str, **_: object) -> None:
+    async def send_message(
+        self, chat_id: int, text: str, reply_markup: object = None, **_: object
+    ) -> None:
         if chat_id in self._blocked:
             raise TelegramForbiddenError(method=None, message="bot was blocked by the user")
 
@@ -125,6 +129,7 @@ class FakeBot:
             raise TelegramRetryAfter(method=None, message="flood control", retry_after=4)
 
         self.sent.append((chat_id, text))
+        self.markups.append(reply_markup)
 
 
 @pytest.fixture
@@ -1173,3 +1178,59 @@ async def test_the_html_export_is_super_admin_only(users) -> None:
 
     assert bot.documents == []
     assert callback.alerts == [SUPER_ADMIN_ONLY_MESSAGE]
+
+
+# --- the verdict redraws the driver's menu ---------------------------------
+
+
+def _menu_labels(markup) -> list[str]:
+    return [button.text for row in markup.keyboard for button in row]
+
+
+async def test_granting_access_hands_the_driver_the_document_button() -> None:
+    # No /start needed: the verdict message itself carries the fresh menu.
+    access = InMemoryAddAccessRepository()
+    access.set_status(7, AddAccessStatus.PENDING)
+    bot = FakeBot()
+
+    await handle_allow_add(
+        FakeCallbackQuery("admin:allow_add:7"),
+        ADMIN_IDS,
+        ADMIN_IDS,
+        DecideAddAccessUseCase(access),
+        bot,
+    )
+
+    assert ADD_DOCUMENT_BUTTON in _menu_labels(bot.markups[0])
+
+
+async def test_a_refusal_redraws_the_menu_without_the_button() -> None:
+    access = InMemoryAddAccessRepository()
+    access.set_status(7, AddAccessStatus.PENDING)
+    bot = FakeBot()
+
+    await handle_deny_add(
+        FakeCallbackQuery("admin:deny_add:7"),
+        ADMIN_IDS,
+        ADMIN_IDS,
+        DecideAddAccessUseCase(access),
+        bot,
+    )
+
+    assert ADD_DOCUMENT_BUTTON not in _menu_labels(bot.markups[0])
+
+
+async def test_revoking_takes_the_document_button_back() -> None:
+    access = InMemoryAddAccessRepository()
+    access.set_status(7, AddAccessStatus.APPROVED)
+    bot = FakeBot()
+
+    await handle_revoke_add(
+        FakeCallbackQuery("admin:revoke_add:7"),
+        ADMIN_IDS,
+        ADMIN_IDS,
+        RevokeAddAccessUseCase(access),
+        bot,
+    )
+
+    assert ADD_DOCUMENT_BUTTON not in _menu_labels(bot.markups[0])
