@@ -253,7 +253,10 @@ async def test_the_flow_walks_place_file_note_preview_save() -> None:
     chosen = FakeCallbackQuery(f"add_doc:place:{place.id}")
     await handle_place_chosen(chosen, state, world.get_place)
     assert await state.get_state() == AddDocument.content
-    assert "Manzil tanlandi" in texts(chosen.message)
+    confirmation = texts(chosen.message)
+    assert "Manzil tanlandi" in confirmation
+    # The name carries the map link, so the pick can be checked on the spot.
+    assert '<a href="' in confirmation
 
     upload = FakeMessage(photo=[FakePhotoSize("SMALL"), FakePhotoSize("BIG")])
     await handle_content_photo(upload, state, world.get_place)
@@ -285,9 +288,10 @@ async def test_a_note_alone_is_enough() -> None:
     await handle_content_note(note, state, world.get_place)
 
     assert await state.get_state() == AddDocument.preview
-    # No attachment: the preview is a plain message that says so.
+    # No attachment: the preview is a plain message, and it does not
+    # announce the absence — the missing file speaks for itself.
     assert note.answers[0]["kind"] == "text"
-    assert "Biriktirilmagan" in str(note.answers[0]["text"])
+    assert "Biriktirilmagan" not in str(note.answers[0]["text"])
 
 
 async def test_an_alien_file_type_is_refused() -> None:

@@ -8,7 +8,7 @@ from app.domain.value_objects.category import PlaceCategory
 from app.domain.value_objects.coordinates import Coordinates
 from app.presentation.telegram.document_formatters import (
     CAPTION_LIMIT,
-    NO_ATTACHMENT_LABEL,
+    NOTE_PREFIX,
     PLACE_GONE_LABEL,
     format_document_caption,
     format_documents_page,
@@ -95,21 +95,35 @@ def test_an_empty_list_says_so() -> None:
     assert "qo'shilmagan" in format_documents_page(page_of())
 
 
-def test_the_caption_names_the_place_and_the_note() -> None:
+def test_the_caption_links_the_place_name_instead_of_a_naked_url() -> None:
     caption = format_document_caption(make_card(place=make_place()))
 
+    assert '<a href="' in caption
     assert "Газпром" in caption
-    assert "CMR kerak" in caption
-    assert NO_ATTACHMENT_LABEL in caption
+    # The URL lives only inside the anchor — never as a bare line.
+    assert "\nhttps://" not in caption
+    assert f"{NOTE_PREFIX} CMR kerak" in caption
 
 
-def test_the_caption_marks_an_attachment() -> None:
+def test_the_caption_escapes_the_drivers_input() -> None:
     caption = format_document_caption(
-        make_card(place=make_place(), file_kind=AttachmentKind.PHOTO)
+        make_card(note="<b>izoh</b>", place=make_place(name="<Газпром>"))
     )
 
-    assert NO_ATTACHMENT_LABEL not in caption
-    assert "📎" in caption
+    assert "<Газпром>" not in caption
+    assert "<b>izoh</b>" not in caption
+
+
+def test_the_caption_marks_an_attachment_and_only_then() -> None:
+    with_file = format_document_caption(
+        make_card(place=make_place(), file_kind=AttachmentKind.PHOTO)
+    )
+    without = format_document_caption(make_card(place=make_place()))
+
+    assert "📎" in with_file
+    # A missing attachment says nothing — the absent file speaks for itself.
+    assert "📎" not in without
+    assert "Biriktirilmagan" not in without
 
 
 def test_the_caption_survives_a_deleted_place() -> None:

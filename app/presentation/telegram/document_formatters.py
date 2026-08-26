@@ -9,7 +9,7 @@ NO_DOCUMENTS_MESSAGE = (
     "➕ Hujjat qo'shish orqali manzilga hujjat biriktirish mumkin."
 )
 PLACE_GONE_LABEL = "Manzil o'chirilgan"
-NO_ATTACHMENT_LABEL = "Biriktirilmagan — faqat izoh bor."
+NOTE_PREFIX = "📝 Hujjat turlari:"
 ATTACHMENT_LABELS = {
     AttachmentKind.PHOTO: "📎 Rasm biriktirilgan",
     AttachmentKind.FILE: "📎 Hujjat biriktirilgan",
@@ -51,21 +51,17 @@ def format_documents_page(page: DocumentsPage) -> str:
 def format_document_caption(card: DocumentCard) -> str:
     """The full card — the caption under the attachment, or the message itself.
 
-    Plain text, no HTML: captions travel with photos and files where a broken
-    tag would sink the whole send.
+    Sent with parse_mode="HTML": the place name is the link, a naked URL under
+    it would only repeat the line. Driver input — name and note — is escaped.
+    A missing attachment says nothing; the absent file speaks for itself.
     """
-    place_line = (
-        f"📍 {card.place.name}\n{place_map_link(card.place)}"
-        if card.place is not None
-        else f"📍 {PLACE_GONE_LABEL}"
-    )
-    attachment_line = (
-        ATTACHMENT_LABELS[card.document.file_kind]
-        if card.document.has_attachment
-        else NO_ATTACHMENT_LABEL
-    )
+    lines = [f"📍 {_place_line(card)}"]
+    if card.document.has_attachment:
+        lines.append(ATTACHMENT_LABELS[card.document.file_kind])
+    lines.append("")
+    lines.append(f"{NOTE_PREFIX} {html.escape(card.document.note)}")
 
-    text = f"{place_line}\n{attachment_line}\n\n📝 {card.document.note}"
+    text = "\n".join(lines)
     if len(text) <= CAPTION_LIMIT:
         return text
     return text[: CAPTION_LIMIT - 1] + "…"

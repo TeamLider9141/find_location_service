@@ -1,3 +1,4 @@
+import html
 import sqlite3
 from datetime import datetime
 
@@ -32,6 +33,7 @@ from app.presentation.telegram.errors import (
     report_service_error,
     user_id_of,
 )
+from app.presentation.telegram.formatters import place_map_link
 from app.presentation.telegram.keyboards.documents import (
     build_document_preview_keyboard,
     build_documents_page_keyboard,
@@ -62,8 +64,11 @@ NO_PLACES_MESSAGE = (
     "Avval ➕ Joy qo'shish orqali manzil qo'shing."
 )
 ATTACH_PLACE_MESSAGE = "Manzil ulash — hujjat qaysi manzilga tegishli? Ro'yxatdan tanlang:"
+# The name carries the map link so the driver can check they picked the right
+# place before writing anything; the place's own note rides under it.
 PLACE_CHOSEN_TEMPLATE = (
-    "✅ Manzil tanlandi: {name}\n\n"
+    '✅ Manzil tanlandi: <a href="{link}">{name}</a>\n'
+    "{note_line}\n"
     "Endi unga hujjat biriktirish uchun izoh yozing — hujjat turlari, "
     "nimalar kerakligi ({limit} so'zgacha).\n"
     "Rasm (png/jpg) yoki hujjat (pdf, doc, docx) ham tashlashingiz mumkin."
@@ -306,8 +311,16 @@ async def handle_place_chosen(
 
     await state.update_data(**{_PLACE_KEY: place.id})
     await state.set_state(AddDocument.content)
+    note_line = f"📝 {html.escape(place.note)}\n" if place.note else ""
     await message.answer(
-        PLACE_CHOSEN_TEMPLATE.format(name=place.name, limit=NOTE_WORD_LIMIT)
+        PLACE_CHOSEN_TEMPLATE.format(
+            link=place_map_link(place),
+            name=html.escape(place.name),
+            note_line=note_line,
+            limit=NOTE_WORD_LIMIT,
+        ),
+        parse_mode="HTML",
+        disable_web_page_preview=True,
     )
     await callback_query.answer()
 
@@ -619,17 +632,29 @@ async def _send_document_card(
     if header:
         caption = f"{header}\n\n{caption}"
 
+    # HTML everywhere: the place name in the caption is the map link.
     document = card.document
     if document.file_kind is AttachmentKind.PHOTO and document.file_id:
         await message.answer_photo(
-            document.file_id, caption=caption, reply_markup=reply_markup
+            document.file_id,
+            caption=caption,
+            reply_markup=reply_markup,
+            parse_mode="HTML",
         )
     elif document.file_kind is AttachmentKind.FILE and document.file_id:
         await message.answer_document(
-            document.file_id, caption=caption, reply_markup=reply_markup
+            document.file_id,
+            caption=caption,
+            reply_markup=reply_markup,
+            parse_mode="HTML",
         )
     else:
-        await message.answer(caption, reply_markup=reply_markup)
+        await message.answer(
+            caption,
+            reply_markup=reply_markup,
+            parse_mode="HTML",
+            disable_web_page_preview=True,
+        )
 
 
 async def _all_places(message: Message, find_places: FindPlacesUseCase):
