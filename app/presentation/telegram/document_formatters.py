@@ -10,6 +10,7 @@ NO_DOCUMENTS_MESSAGE = (
 )
 PLACE_GONE_LABEL = "Manzil o'chirilgan"
 NOTE_PREFIX = "📝 Hujjat turlari:"
+PLACE_NOTE_PREFIX = "ℹ️ Manzil izohi:"
 ATTACHMENT_LABELS = {
     AttachmentKind.PHOTO: "📎 Rasm biriktirilgan",
     AttachmentKind.FILE: "📎 Hujjat biriktirilgan",
@@ -56,6 +57,10 @@ def format_document_caption(card: DocumentCard) -> str:
     A missing attachment says nothing; the absent file speaks for itself.
     """
     lines = [f"📍 {_place_line(card)}"]
+    # The place's own note in full — what the contributor said about the spot
+    # itself — before the document's, which closes the card as the addition.
+    if card.place is not None and card.place.note:
+        lines.append(f"{PLACE_NOTE_PREFIX} {html.escape(card.place.note)}")
     if card.document.has_attachment:
         lines.append(ATTACHMENT_LABELS[card.document.file_kind])
     lines.append("")

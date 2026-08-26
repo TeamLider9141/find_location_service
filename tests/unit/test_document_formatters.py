@@ -139,3 +139,25 @@ def test_the_caption_fits_telegrams_limit() -> None:
 
     assert len(caption) <= CAPTION_LIMIT
     assert caption.endswith("…")
+
+
+def test_the_caption_carries_the_places_own_note_in_full() -> None:
+    from dataclasses import replace
+
+    from app.presentation.telegram.document_formatters import PLACE_NOTE_PREFIX
+
+    place = replace(make_place(), note="Kechasi ochiq, M5 120-km")
+
+    caption = format_document_caption(make_card(place=place))
+
+    assert f"{PLACE_NOTE_PREFIX} Kechasi ochiq, M5 120-km" in caption
+    # The place speaks first, the document closes the card.
+    assert caption.index(PLACE_NOTE_PREFIX) < caption.index(NOTE_PREFIX)
+
+
+def test_a_place_without_a_note_adds_no_empty_line() -> None:
+    from app.presentation.telegram.document_formatters import PLACE_NOTE_PREFIX
+
+    caption = format_document_caption(make_card(place=make_place()))
+
+    assert PLACE_NOTE_PREFIX not in caption
