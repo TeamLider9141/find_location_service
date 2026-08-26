@@ -178,3 +178,27 @@ def test_documents_are_counted_per_place_through_the_use_case() -> None:
     )
 
     assert CountDocumentsByPlaceUseCase(documents).execute() == {place.id: 1}
+
+
+def test_the_author_deletes_their_document() -> None:
+    from app.application.use_cases.documents import DeleteDocumentUseCase
+
+    documents, places, place = seeded()
+    saved = AddDocumentUseCase(documents, places).execute(
+        user_id=42, place_id=place.id, note="ketadi"
+    )
+
+    assert DeleteDocumentUseCase(documents).execute(saved.document.id, user_id=42)
+    assert documents.get(saved.document.id) is None
+
+
+def test_a_stranger_is_refused_the_delete() -> None:
+    from app.application.use_cases.documents import DeleteDocumentUseCase
+
+    documents, places, place = seeded()
+    saved = AddDocumentUseCase(documents, places).execute(
+        user_id=42, place_id=place.id, note="qoladi"
+    )
+
+    assert not DeleteDocumentUseCase(documents).execute(saved.document.id, user_id=7)
+    assert documents.get(saved.document.id) is not None

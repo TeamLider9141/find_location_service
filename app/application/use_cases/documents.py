@@ -79,6 +79,15 @@ class AddDocumentUseCase:
         return DocumentCard(document=saved, place=place)
 
 
+class DeleteDocumentUseCase:
+    def __init__(self, documents: DocumentRepository) -> None:
+        self._documents = documents
+
+    def execute(self, document_id: int, user_id: int) -> bool:
+        """Delete a document the user contributed; False refuses a stranger."""
+        return self._documents.delete(document_id, user_id)
+
+
 class DocumentsForPlacesUseCase:
     """The documents behind one page of search results, in one read."""
 

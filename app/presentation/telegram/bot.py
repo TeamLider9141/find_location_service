@@ -31,6 +31,7 @@ from app.application.use_cases.access import (
 from app.application.use_cases.documents import (
     AddDocumentUseCase,
     CountDocumentsByPlaceUseCase,
+    DeleteDocumentUseCase,
     DocumentsForPlacesUseCase,
     GetDocumentUseCase,
     ListDocumentsPageUseCase,
@@ -114,6 +115,7 @@ def create_dispatcher(
         list_my_documents=ListMyDocumentsUseCase(documents_repository, repository),
         get_document=GetDocumentUseCase(documents_repository, repository),
         update_document=UpdateDocumentUseCase(documents_repository, repository),
+        delete_document=DeleteDocumentUseCase(documents_repository),
         count_documents_by_place=CountDocumentsByPlaceUseCase(documents_repository),
         documents_for_places=DocumentsForPlacesUseCase(documents_repository),
         admin_ids=all_admins,

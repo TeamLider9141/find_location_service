@@ -47,3 +47,6 @@ class DocumentRepository(Protocol):
         a pair — a file id without its kind could not be sent back. Returns
         None when the document does not exist or belongs to someone else.
         """
+
+    def delete(self, document_id: int, user_id: int) -> bool:
+        """Delete a document the user contributed. False when not theirs."""

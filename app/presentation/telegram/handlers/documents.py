@@ -11,6 +11,7 @@ from app.application.use_cases.access import HasAddAccessUseCase
 from app.application.use_cases.documents import (
     AddDocumentUseCase,
     CountDocumentsByPlaceUseCase,
+    DeleteDocumentUseCase,
     DocumentCard,
     GetDocumentUseCase,
     ListDocumentsPageUseCase,
@@ -37,6 +38,7 @@ from app.presentation.telegram.errors import (
 from app.presentation.telegram.formatters import place_map_link
 from app.presentation.telegram.prompts import with_cancel_hint
 from app.presentation.telegram.keyboards.documents import (
+    build_document_delete_confirmation_keyboard,
     build_document_preview_keyboard,
     build_documents_page_keyboard,
     build_my_data_keyboard,
@@ -92,6 +94,9 @@ ASK_NEW_FILE_MESSAGE = with_cancel_hint("Yangi rasm yoki hujjat tashlang.")
 ASK_NEW_NOTE_MESSAGE = with_cancel_hint("Yangi izoh yozing.")
 SAVED_MESSAGE = "✅ Hujjat saqlandi."
 UPDATED_MESSAGE = "✅ Yangilandi."
+CONFIRM_DELETE_MESSAGE = "Bu hujjatni o'chirasizmi?"
+DELETED_MESSAGE = "🗑 O'chirildi."
+DELETE_CANCELLED_MESSAGE = "O'chirish bekor qilindi."
 NOT_YOURS_MESSAGE = "Bu hujjatni faqat uni qo'shgan foydalanuvchi o'zgartira oladi."
 INVALID_SELECTION_MESSAGE = "Tanlov eskirgan. Qaytadan urinib ko'ring."
 PLACE_GONE_MESSAGE = "Bu manzil o'chirilgan. Boshqa manzil tanlang."
@@ -629,6 +634,71 @@ async def _apply_edit(
         reply_markup=build_my_document_actions_keyboard(card.document.id),
         header=UPDATED_MESSAGE,
     )
+
+
+@router.callback_query(F.data.startswith("my_doc:delete:"))
+async def handle_delete_prompt(callback_query: CallbackQuery) -> None:
+    document_id = _parse_id(callback_query.data, "my_doc:delete:")
+    if document_id is None:
+        await callback_query.answer(INVALID_SELECTION_MESSAGE)
+        return
+
+    message = answerable_message(callback_query)
+    if message is None:
+        await callback_query.answer(EXPIRED_MESSAGE)
+        return
+
+    await message.answer(
+        CONFIRM_DELETE_MESSAGE,
+        reply_markup=build_document_delete_confirmation_keyboard(document_id),
+    )
+    await callback_query.answer()
+
+
+@router.callback_query(F.data.startswith("my_doc:confirm_delete:"))
+async def handle_confirm_delete(
+    callback_query: CallbackQuery, delete_document: DeleteDocumentUseCase
+) -> None:
+    document_id = _parse_id(callback_query.data, "my_doc:confirm_delete:")
+    user_id = user_id_of(callback_query)
+    if document_id is None or user_id is None:
+        await callback_query.answer(INVALID_SELECTION_MESSAGE)
+        return
+
+    # Guard before the delete, not after: a document removed behind a driver
+    # who cannot be told about it is a silent loss of shared data.
+    message = answerable_message(callback_query)
+    if message is None:
+        await callback_query.answer(EXPIRED_MESSAGE)
+        return
+
+    try:
+        deleted = delete_document.execute(document_id=document_id, user_id=user_id)
+    except sqlite3.Error as error:
+        report_service_error(error, "delete document")
+        await message.answer(DATABASE_ERROR_MESSAGE)
+        await callback_query.answer()
+        return
+
+    # The refusal comes from the delete itself returning False rather than a
+    # separate ownership read: one source of truth for who may delete.
+    if not deleted:
+        await callback_query.answer(NOT_YOURS_MESSAGE)
+        return
+
+    await message.answer(DELETED_MESSAGE)
+    await callback_query.answer()
+
+
+@router.callback_query(F.data == "my_doc:cancel_delete")
+async def handle_cancel_delete(callback_query: CallbackQuery) -> None:
+    message = answerable_message(callback_query)
+    if message is not None:
+        await message.answer(DELETE_CANCELLED_MESSAGE)
+
+    # The spinner is closed even when the message is gone: an unanswered
+    # callback spins on the driver's screen until Telegram times it out.
+    await callback_query.answer()
 
 
 # --- Shared helpers --------------------------------------------------------

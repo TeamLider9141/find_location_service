@@ -157,6 +157,18 @@ class SQLiteDocumentRepository:
 
         return self.get(document_id) if changed else None
 
+    def delete(self, document_id: int, user_id: int) -> bool:
+        with closing(self._connect()) as connection:
+            # Ownership sits in the WHERE, as in update: one statement both
+            # checks and deletes, so no window opens between the two.
+            cursor = connection.execute(
+                "DELETE FROM place_documents WHERE id = ? AND added_by_user_id = ?",
+                (document_id, user_id),
+            )
+            connection.commit()
+
+        return bool(cursor.rowcount)
+
     def _get_owned(self, document_id: int, user_id: int) -> PlaceDocument | None:
         document = self.get(document_id)
         if document is None or document.added_by_user_id != user_id:

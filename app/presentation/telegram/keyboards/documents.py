@@ -120,6 +120,33 @@ def build_my_document_actions_keyboard(document_id: int) -> InlineKeyboardMarkup
                     callback_data=f"my_doc:renote:{document_id}",
                 )
             ],
+            [
+                InlineKeyboardButton(
+                    text="🗑 O'chirish",
+                    callback_data=f"my_doc:delete:{document_id}",
+                )
+            ],
+        ]
+    )
+
+
+def build_document_delete_confirmation_keyboard(document_id: int) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="✅ O'chirishni tasdiqlash",
+                    callback_data=f"my_doc:confirm_delete:{document_id}",
+                )
+            ],
+            # No id on cancel: nothing is deleted, so there is nothing to
+            # target, and a stale id here would be one more thing to validate.
+            [
+                InlineKeyboardButton(
+                    text="Bekor qilish",
+                    callback_data="my_doc:cancel_delete",
+                )
+            ],
         ]
     )
 

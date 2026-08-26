@@ -375,6 +375,7 @@ async def test_my_documents_lists_only_mine_with_edit_buttons() -> None:
     assert callbacks == [
         f"my_doc:refile:{mine.document.id}",
         f"my_doc:renote:{mine.document.id}",
+        f"my_doc:delete:{mine.document.id}",
     ]
 
 
@@ -450,3 +451,57 @@ async def test_documented_places_lead_the_picker_and_wear_the_mark() -> None:
     assert callbacks_[0] == f"add_doc:place:{documented.id}"
     assert labels[1] == "Hujjatsiz joy"
     assert callbacks_[1] == f"add_doc:place:{bare.id}"
+
+
+async def test_deleting_my_document_asks_then_deletes() -> None:
+    from app.application.use_cases.documents import DeleteDocumentUseCase
+    from app.presentation.telegram.handlers.documents import (
+        handle_confirm_delete,
+        handle_delete_prompt,
+    )
+
+    world = World()
+    saved = world.document(user_id=42)
+
+    prompt = FakeCallbackQuery(f"my_doc:delete:{saved.document.id}", user_id=42)
+    await handle_delete_prompt(prompt)
+    confirmation = prompt.message.answers[0]
+    assert "o'chirasizmi" in str(confirmation["text"])
+    data = [row[0].callback_data for row in confirmation["reply_markup"].inline_keyboard]
+    assert data == [
+        f"my_doc:confirm_delete:{saved.document.id}",
+        "my_doc:cancel_delete",
+    ]
+
+    confirm = FakeCallbackQuery(f"my_doc:confirm_delete:{saved.document.id}", user_id=42)
+    await handle_confirm_delete(confirm, DeleteDocumentUseCase(world.documents))
+
+    assert world.documents.get(saved.document.id) is None
+    assert "O'chirildi" in texts(confirm.message)
+
+
+async def test_a_stranger_cannot_confirm_someone_elses_delete() -> None:
+    from app.application.use_cases.documents import DeleteDocumentUseCase
+    from app.presentation.telegram.handlers.documents import handle_confirm_delete
+
+    world = World()
+    saved = world.document(user_id=42)
+
+    confirm = FakeCallbackQuery(f"my_doc:confirm_delete:{saved.document.id}", user_id=7)
+    await handle_confirm_delete(confirm, DeleteDocumentUseCase(world.documents))
+
+    assert world.documents.get(saved.document.id) is not None
+    assert NOT_YOURS_MESSAGE in confirm.alerts
+
+
+async def test_cancelling_the_delete_keeps_the_document() -> None:
+    from app.presentation.telegram.handlers.documents import handle_cancel_delete
+
+    world = World()
+    saved = world.document(user_id=42)
+
+    cancel = FakeCallbackQuery("my_doc:cancel_delete", user_id=42)
+    await handle_cancel_delete(cancel)
+
+    assert world.documents.get(saved.document.id) is not None
+    assert "bekor" in texts(cancel.message).lower()

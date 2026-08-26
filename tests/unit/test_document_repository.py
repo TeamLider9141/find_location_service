@@ -160,3 +160,21 @@ def test_no_places_asked_means_no_documents_answered(repository) -> None:
     add(repository, place_id=1)
 
     assert repository.list_for_places(()) == {}
+
+
+def test_the_author_may_delete_their_document(repository) -> None:
+    saved = add(repository, user_id=1)
+
+    assert repository.delete(saved.id, user_id=1) is True
+    assert repository.get(saved.id) is None
+
+
+def test_a_stranger_may_not_delete(repository) -> None:
+    saved = add(repository, user_id=1)
+
+    assert repository.delete(saved.id, user_id=2) is False
+    assert repository.get(saved.id) is not None
+
+
+def test_deleting_a_missing_document_is_false(repository) -> None:
+    assert repository.delete(999, user_id=1) is False

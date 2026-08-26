@@ -73,6 +73,14 @@ class InMemoryDocumentRepository:
         self._documents[document_id] = updated
         return updated
 
+    def delete(self, document_id: int, user_id: int) -> bool:
+        existing = self._documents.get(document_id)
+        if existing is None or existing.added_by_user_id != user_id:
+            return False
+
+        del self._documents[document_id]
+        return True
+
     @staticmethod
     def _newest_first(documents) -> list[PlaceDocument]:
         # Ties break on the id, the same ORDER BY the SQL uses.
