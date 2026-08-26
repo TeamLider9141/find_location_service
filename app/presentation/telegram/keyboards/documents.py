@@ -29,7 +29,7 @@ def build_documents_page_keyboard(page: DocumentsPage) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
-DOCUMENTED_MARK = "📝"
+DOCUMENTED_MARK = "📁"
 
 
 def build_place_pick_keyboard(

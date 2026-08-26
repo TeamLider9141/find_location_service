@@ -9,7 +9,9 @@ NO_DOCUMENTS_MESSAGE = (
     "➕ Hujjat qo'shish orqali manzilga hujjat biriktirish mumkin."
 )
 PLACE_GONE_LABEL = "Manzil o'chirilgan"
-NOTE_PREFIX = "📝 Hujjat turlari:"
+# 📁 is the documents' own mark everywhere — the search results, the picker,
+# this list — while 📝 stays with the places' notes.
+NOTE_PREFIX = "📁 Hujjat turlari:"
 PLACE_NOTE_PREFIX = "ℹ️ Manzil izohi:"
 ATTACHMENT_LABELS = {
     AttachmentKind.PHOTO: "📎 Rasm biriktirilgan",
@@ -43,7 +45,7 @@ def format_documents_page(page: DocumentsPage) -> str:
         lines.append(f"{index}) {_place_line(card)}")
         if card.document.has_attachment:
             lines.append(f"   {ATTACHMENT_LABELS[card.document.file_kind]}")
-        lines.append(f"   📝 {html.escape(_shortened(card.document.note))}")
+        lines.append(f"   📁 {html.escape(_shortened(card.document.note))}")
         lines.append("")
 
     return "\n".join(lines).rstrip()

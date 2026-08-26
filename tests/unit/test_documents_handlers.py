@@ -446,7 +446,7 @@ async def test_documented_places_lead_the_picker_and_wear_the_mark() -> None:
     labels = [row[0].text for row in keyboard.inline_keyboard]
     callbacks_ = [row[0].callback_data for row in keyboard.inline_keyboard]
     # The documented place rises to the top and says why.
-    assert labels[0] == "📝 Hujjatli joy"
+    assert labels[0] == "📁 Hujjatli joy"
     assert callbacks_[0] == f"add_doc:place:{documented.id}"
     assert labels[1] == "Hujjatsiz joy"
     assert callbacks_[1] == f"add_doc:place:{bare.id}"
