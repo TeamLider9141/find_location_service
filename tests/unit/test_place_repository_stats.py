@@ -109,3 +109,17 @@ def test_excluded_authors_places_are_left_out_of_the_counts(repository) -> None:
     counts = repository.count_by_category(exclude_author_ids=(99,))
 
     assert counts[PlaceCategory.FUEL] == 1
+
+
+def test_count_by_author_totals_every_contributor(repository) -> None:
+    # Ordering the whole user list by contribution needs every author's count,
+    # not the top slice top_authors returns.
+    add(repository, user_id=1)
+    add(repository, name="Лукойл", user_id=1)
+    add(repository, name="Кафе", user_id=2)
+
+    assert repository.count_by_author() == {1: 2, 2: 1}
+
+
+def test_count_by_author_of_an_empty_database_is_empty(repository) -> None:
+    assert repository.count_by_author() == {}

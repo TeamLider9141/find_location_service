@@ -83,3 +83,10 @@ class PlaceRepository(Protocol):
 
     def top_authors(self, limit: int = 10) -> list[tuple[int, int]]:
         """Return (user id, places added) pairs, biggest contributor first."""
+
+    def count_by_author(self) -> dict[int, int]:
+        """Return how many places every author added. Non-authors are absent.
+
+        Ranking the whole user list needs each user's total, which the top
+        slice ``top_authors`` returns cannot give.
+        """

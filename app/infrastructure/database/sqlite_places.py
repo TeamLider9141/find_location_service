@@ -285,6 +285,17 @@ class SQLitePlaceRepository:
 
         return [(int(row["added_by_user_id"]), int(row["total"])) for row in rows]
 
+    def count_by_author(self) -> dict[int, int]:
+        with closing(self._connect()) as connection:
+            rows = connection.execute(
+                """
+                SELECT added_by_user_id, COUNT(*) AS total FROM places
+                GROUP BY added_by_user_id
+                """
+            ).fetchall()
+
+        return {int(row["added_by_user_id"]): int(row["total"]) for row in rows}
+
     def _get_owned(self, place_id: int, user_id: int) -> Place | None:
         with closing(self._connect()) as connection:
             row = connection.execute(

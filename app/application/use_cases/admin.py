@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from app.domain.entities.bot_user import BotUser
 from app.domain.entities.deletion_record import DeletionRecord
 from app.domain.entities.place import Place
+from app.domain.interfaces.add_access import AddAccessRepository
 from app.domain.interfaces.deletions import DeletionLog
 from app.domain.interfaces.places import PlaceRepository
 from app.domain.interfaces.users import UserRepository
@@ -35,6 +36,7 @@ class AdminOverview:
 class UserRow:
     user: BotUser
     places: int
+    may_add: bool = False
 
 
 @dataclass(frozen=True)
@@ -106,28 +108,59 @@ class GetAdminOverviewUseCase:
 
 
 class ListUsersPageUseCase:
-    def __init__(self, users: UserRepository, places: PlaceRepository) -> None:
+    """The user list, ordered by what the admin came to find.
+
+    Who may write to the shared database is the question the list could not
+    answer at all, so those drivers lead it; the biggest contributors follow.
+    Ranking spans everyone before the page is cut — sorting a slice would rank
+    each page on its own and leave a permission stranded on page three.
+    """
+
+    def __init__(
+        self, users: UserRepository, places: PlaceRepository, access: AddAccessRepository
+    ) -> None:
         self._users = users
         self._places = places
+        self._access = access
 
     def execute(
         self, page: int, page_size: int, exclude_ids: tuple[int, ...] = ()
     ) -> UsersPage:
         safe_page = max(page, 0)
         safe_size = max(page_size, 1)
+        # The whole list, since the ranking is not the order the repository
+        # stores. count() is a ceiling on the limit: it includes the excluded
+        # users, so no visible one is cut off.
         total, users = self._users.list_page(
-            offset=safe_page * safe_size, limit=safe_size, exclude_ids=exclude_ids
+            offset=0, limit=self._users.count(), exclude_ids=exclude_ids
         )
+
+        allowed = self._access.allowed_ids()
+        places = self._places.count_by_author()
+        rows = sorted(
+            (
+                UserRow(
+                    user=user,
+                    places=places.get(user.id, 0),
+                    may_add=user.id in allowed,
+                )
+                for user in users
+            ),
+            key=_user_rank,
+        )
+        start = safe_page * safe_size
 
         return UsersPage(
             total=total,
             page=safe_page,
             page_size=safe_size,
-            rows=[
-                UserRow(user=user, places=len(self._places.list_by_author(user.id)))
-                for user in users
-            ],
+            rows=rows[start : start + safe_size],
         )
+
+
+def _user_rank(row: UserRow) -> tuple[bool, int, float, int]:
+    # Sorted ascending, so every key is negated into "best first".
+    return (not row.may_add, -row.places, -row.user.last_seen_at.timestamp(), -row.user.id)
 
 
 class GetUserDetailUseCase:

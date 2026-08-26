@@ -174,12 +174,15 @@ class InMemoryPlaceRepository:
         return dict(counts)
 
     def top_authors(self, limit: int = 10) -> list[tuple[int, int]]:
+        # Ties break on the user id, the same ORDER BY the SQL uses.
+        ranked = sorted(self.count_by_author().items(), key=lambda item: (-item[1], item[0]))
+        return ranked[: max(limit, 0)]
+
+    def count_by_author(self) -> dict[int, int]:
         counts: Counter[int] = Counter(
             place.added_by_user_id for place in self._places.values()
         )
-        # Ties break on the user id, the same ORDER BY the SQL uses.
-        ranked = sorted(counts.items(), key=lambda item: (-item[1], item[0]))
-        return ranked[: max(limit, 0)]
+        return dict(counts)
 
 
 def _category_value(category: PlaceCategory | None) -> str | None:

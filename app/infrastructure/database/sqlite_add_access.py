@@ -44,6 +44,15 @@ class SQLiteAddAccessRepository:
             connection.execute("DELETE FROM add_access WHERE user_id = ?", (user_id,))
             connection.commit()
 
+    def allowed_ids(self) -> set[int]:
+        with closing(self._connect()) as connection:
+            rows = connection.execute(
+                "SELECT user_id FROM add_access WHERE status = ?",
+                (AddAccessStatus.APPROVED.value,),
+            ).fetchall()
+
+        return {int(row["user_id"]) for row in rows}
+
     def _initialize(self) -> None:
         with closing(self._connect()) as connection:
             connection.execute(

@@ -272,7 +272,7 @@ async def test_the_user_list_is_paged(places, users) -> None:
         callback,
         admin_ids=ADMIN_IDS,
         super_admin_ids=ADMIN_IDS,
-        list_users_page=ListUsersPageUseCase(users, places),
+        list_users_page=ListUsersPageUseCase(users, places, InMemoryAddAccessRepository()),
     )
 
     assert "Sahifa 2" in callback.texts[0]
@@ -285,7 +285,7 @@ async def test_a_forged_page_number_is_refused(places, users) -> None:
         callback,
         admin_ids=ADMIN_IDS,
         super_admin_ids=ADMIN_IDS,
-        list_users_page=ListUsersPageUseCase(users, places),
+        list_users_page=ListUsersPageUseCase(users, places, InMemoryAddAccessRepository()),
     )
 
     assert callback.alerts == [INVALID_SELECTION_MESSAGE]
@@ -806,7 +806,7 @@ async def test_the_ordinary_rung_does_not_see_super_admins_in_the_list(places, u
         callback,
         admin_ids=BOTH_RUNGS,
         super_admin_ids=ADMIN_IDS,
-        list_users_page=ListUsersPageUseCase(users, places),
+        list_users_page=ListUsersPageUseCase(users, places, InMemoryAddAccessRepository()),
     )
 
     assert "Haydovchi" in callback.texts[0]
@@ -823,7 +823,7 @@ async def test_a_super_admin_still_sees_everyone(places, users) -> None:
         callback,
         admin_ids=BOTH_RUNGS,
         super_admin_ids=ADMIN_IDS,
-        list_users_page=ListUsersPageUseCase(users, places),
+        list_users_page=ListUsersPageUseCase(users, places, InMemoryAddAccessRepository()),
     )
 
     assert "Haydovchi" in callback.texts[0]

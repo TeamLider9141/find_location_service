@@ -13,6 +13,8 @@ from app.application.use_cases.admin import (
 from app.domain.entities.place import Place
 from app.domain.value_objects.category import PlaceCategory
 from app.domain.value_objects.coordinates import Coordinates
+from app.domain.value_objects.add_access import AddAccessStatus
+from app.infrastructure.repositories.in_memory_add_access import InMemoryAddAccessRepository
 from app.infrastructure.repositories.in_memory_deletions import InMemoryDeletionLog
 from app.infrastructure.repositories.in_memory_places import InMemoryPlaceRepository
 from app.infrastructure.repositories.in_memory_users import InMemoryUserRepository
@@ -105,7 +107,7 @@ def test_user_page_reports_how_many_places_each_added() -> None:
     users.record_seen(1, full_name="Ali", username="ali")
     add_place(places, user_id=1)
 
-    page = ListUsersPageUseCase(users, places).execute(page=0, page_size=10)
+    page = ListUsersPageUseCase(users, places, InMemoryAddAccessRepository()).execute(page=0, page_size=10)
 
     assert page.total == 1
     assert page.rows[0].places == 1
@@ -116,8 +118,8 @@ def test_user_page_numbers_start_at_zero() -> None:
     for user_id in (1, 2, 3):
         users.record_seen(user_id, full_name=f"U{user_id}", username=None)
 
-    first = ListUsersPageUseCase(users, InMemoryPlaceRepository()).execute(page=0, page_size=2)
-    second = ListUsersPageUseCase(users, InMemoryPlaceRepository()).execute(page=1, page_size=2)
+    first = ListUsersPageUseCase(users, InMemoryPlaceRepository(), InMemoryAddAccessRepository()).execute(page=0, page_size=2)
+    second = ListUsersPageUseCase(users, InMemoryPlaceRepository(), InMemoryAddAccessRepository()).execute(page=1, page_size=2)
 
     assert len(first.rows) == 2
     assert len(second.rows) == 1
@@ -127,7 +129,7 @@ def test_a_negative_page_is_read_as_the_first_page() -> None:
     users = InMemoryUserRepository()
     users.record_seen(1, full_name="Ali", username=None)
 
-    page = ListUsersPageUseCase(users, InMemoryPlaceRepository()).execute(page=-3, page_size=10)
+    page = ListUsersPageUseCase(users, InMemoryPlaceRepository(), InMemoryAddAccessRepository()).execute(page=-3, page_size=10)
 
     assert len(page.rows) == 1
 
@@ -261,3 +263,99 @@ def test_an_author_tracking_never_saw_is_grouped_by_id() -> None:
 
     assert groups[0].user is None
     assert groups[0].author_id == 7
+
+
+def test_the_user_list_puts_add_access_holders_first() -> None:
+    # Who may write to the shared database is the one thing the list could not
+    # tell before, so they lead it — a quiet contributor is easier to find than
+    # a permission scattered over five pages.
+    users = InMemoryUserRepository()
+    places = InMemoryPlaceRepository()
+    access = InMemoryAddAccessRepository()
+    users.record_seen(1, full_name="Allowed", username=None)
+    users.record_seen(2, full_name="Newest", username=None)
+    access.set_status(1, AddAccessStatus.APPROVED)
+
+    page = ListUsersPageUseCase(users, places, access).execute(page=0, page_size=10)
+
+    assert [row.user.full_name for row in page.rows] == ["Allowed", "Newest"]
+    assert [row.may_add for row in page.rows] == [True, False]
+
+
+def test_a_pending_request_is_not_add_access() -> None:
+    users = InMemoryUserRepository()
+    access = InMemoryAddAccessRepository()
+    users.record_seen(1, full_name="Asked", username=None)
+    access.set_status(1, AddAccessStatus.PENDING)
+
+    page = ListUsersPageUseCase(users, InMemoryPlaceRepository(), access).execute(
+        page=0, page_size=10
+    )
+
+    assert page.rows[0].may_add is False
+
+
+def test_the_user_list_ranks_by_places_added() -> None:
+    users = InMemoryUserRepository()
+    places = InMemoryPlaceRepository()
+    for user_id, name in ((1, "One"), (2, "Two"), (3, "Three")):
+        users.record_seen(user_id, full_name=name, username=None)
+    add_place(places, user_id=2)
+    add_place(places, name="Лукойл", user_id=2)
+    add_place(places, name="Кафе", user_id=3)
+
+    page = ListUsersPageUseCase(users, places, InMemoryAddAccessRepository()).execute(
+        page=0, page_size=10
+    )
+
+    assert [row.user.full_name for row in page.rows] == ["Two", "Three", "One"]
+    assert [row.places for row in page.rows] == [2, 1, 0]
+
+
+def test_add_access_outranks_a_bigger_contributor() -> None:
+    users = InMemoryUserRepository()
+    places = InMemoryPlaceRepository()
+    access = InMemoryAddAccessRepository()
+    users.record_seen(1, full_name="Allowed", username=None)
+    users.record_seen(2, full_name="Busy", username=None)
+    add_place(places, user_id=2)
+    access.set_status(1, AddAccessStatus.APPROVED)
+
+    page = ListUsersPageUseCase(users, places, access).execute(page=0, page_size=10)
+
+    assert [row.user.full_name for row in page.rows] == ["Allowed", "Busy"]
+
+
+def test_the_order_holds_across_pages() -> None:
+    # Sorting a page after slicing it would rank each page on its own and leave
+    # an access holder stranded on page three.
+    users = InMemoryUserRepository()
+    places = InMemoryPlaceRepository()
+    access = InMemoryAddAccessRepository()
+    for user_id in range(1, 6):
+        users.record_seen(user_id, full_name=f"U{user_id}", username=None)
+    access.set_status(5, AddAccessStatus.APPROVED)
+    add_place(places, user_id=1)
+
+    use_case = ListUsersPageUseCase(users, places, access)
+    first = use_case.execute(page=0, page_size=2)
+    second = use_case.execute(page=1, page_size=2)
+
+    assert [row.user.full_name for row in first.rows] == ["U5", "U1"]
+    assert [row.user.full_name for row in second.rows] not in ([], ["U5"])
+    assert first.total == 5
+
+
+def test_hidden_users_stay_out_of_the_ranked_list() -> None:
+    users = InMemoryUserRepository()
+    access = InMemoryAddAccessRepository()
+    users.record_seen(1, full_name="Super", username=None)
+    users.record_seen(2, full_name="Ordinary", username=None)
+    access.set_status(1, AddAccessStatus.APPROVED)
+
+    page = ListUsersPageUseCase(users, InMemoryPlaceRepository(), access).execute(
+        page=0, page_size=10, exclude_ids=(1,)
+    )
+
+    assert [row.user.full_name for row in page.rows] == ["Ordinary"]
+    assert page.total == 1

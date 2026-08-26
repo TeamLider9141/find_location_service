@@ -14,3 +14,10 @@ class AddAccessRepository(Protocol):
 
     def clear(self, user_id: int) -> None:
         """Forget this driver entirely, as if they never asked."""
+
+    def allowed_ids(self) -> set[int]:
+        """Return every driver who may add — approved only, pending is not yet.
+
+        Asked for whole so the admin's user list can mark and rank hundreds of
+        rows without a status query each.
+        """

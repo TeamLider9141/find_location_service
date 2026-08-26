@@ -77,7 +77,7 @@ def create_dispatcher(
         user_settings=user_settings,
         record_search=RecordSearchUseCase(users),
         admin_overview=GetAdminOverviewUseCase(repository, users),
-        list_users_page=ListUsersPageUseCase(users, repository),
+        list_users_page=ListUsersPageUseCase(users, repository, add_access),
         user_detail=GetUserDetailUseCase(users, repository),
         top_searches=TopSearchesUseCase(users),
         delete_place_as_admin=DeletePlaceAsAdminUseCase(repository, deletions),

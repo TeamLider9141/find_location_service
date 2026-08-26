@@ -18,6 +18,7 @@ from app.presentation.telegram.keyboards.categories import (
 
 EMPTY_DATABASE_MESSAGE = "Hali hech kim joy qo'shmagan."
 NO_USERS_MESSAGE = "Foydalanuvchilar yo'q."
+ADD_ACCESS_MARK = "📍"
 NO_SEARCHES_MESSAGE = "Hali qidiruv yo'q."
 NO_PLACES_IN_CATEGORY_MESSAGE = "Bu kategoriyada hali joy yo'q."
 NO_DELETIONS_MESSAGE = "Jurnal bo'sh — hali hech narsa o'chirilmagan."
@@ -79,8 +80,11 @@ def format_users_page(page: UsersPage) -> str:
     # first user.
     first_number = page.page * page.page_size + 1
     for index, row in enumerate(page.rows, start=first_number):
+        # The pin marks the right to add places — the one thing about a user
+        # the list could not show, and the reason these rows come first.
+        pin = f"{ADD_ACCESS_MARK} " if row.may_add else ""
         lines.append(
-            f"{index}) {_user_label(row.user)} — {row.places} ta joy"
+            f"{index}) {pin}{_user_label(row.user)} — {row.places} ta joy"
             f" | oxirgi faollik: {_format_stamp(row.user.last_seen_at)}"
         )
 

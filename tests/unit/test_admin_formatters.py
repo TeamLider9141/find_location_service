@@ -320,3 +320,20 @@ def test_an_admin_deletion_is_labelled_as_such() -> None:
 
 def test_an_empty_journal_says_so() -> None:
     assert "bo'sh" in format_deletion_log([]).lower()
+
+
+def test_the_user_list_pins_who_may_add() -> None:
+    page = UsersPage(
+        total=2,
+        page=0,
+        page_size=5,
+        rows=[
+            UserRow(user=make_user(user_id=1, full_name="Allowed"), places=3, may_add=True),
+            UserRow(user=make_user(user_id=2, full_name="Reader"), places=0),
+        ],
+    )
+
+    allowed, reader = format_users_page(page).splitlines()[-2:]
+
+    assert "📍" in allowed
+    assert "📍" not in reader
