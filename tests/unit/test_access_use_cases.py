@@ -1,3 +1,5 @@
+from datetime import datetime, timedelta
+
 from app.application.use_cases.access import (
     DecideAddAccessUseCase,
     RequestAddAccessUseCase,
@@ -5,6 +7,7 @@ from app.application.use_cases.access import (
 )
 from app.domain.value_objects.add_access import AddAccessStatus
 from app.infrastructure.repositories.in_memory_add_access import InMemoryAddAccessRepository
+from tests.unit.test_add_access_repository import Clock
 
 
 def test_the_first_request_marks_the_driver_pending() -> None:
@@ -81,6 +84,21 @@ def test_a_revoked_driver_files_a_fresh_request_next_time() -> None:
     access = InMemoryAddAccessRepository()
     access.set_status(42, AddAccessStatus.APPROVED)
     RevokeAddAccessUseCase(access).execute(42)
+
+    previous = RequestAddAccessUseCase(access).execute(42)
+
+    assert previous is None
+    assert access.status(42) == AddAccessStatus.PENDING
+
+
+def test_a_days_old_request_is_heard_afresh() -> None:
+    # The admins never answered, so the driver is back where they started: the
+    # use case reports no previous standing, which is what makes the handler
+    # announce the request to the admins a second time.
+    clock = Clock(datetime(2026, 8, 26, 12, 0))
+    access = InMemoryAddAccessRepository(clock=clock)
+    access.set_status(42, AddAccessStatus.PENDING)
+    clock.move(timedelta(hours=25))
 
     previous = RequestAddAccessUseCase(access).execute(42)
 

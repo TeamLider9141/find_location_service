@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from app.application.use_cases.admin import (
     AdminPlacesByCategoryUseCase,
@@ -18,6 +18,7 @@ from app.infrastructure.repositories.in_memory_add_access import InMemoryAddAcce
 from app.infrastructure.repositories.in_memory_deletions import InMemoryDeletionLog
 from app.infrastructure.repositories.in_memory_places import InMemoryPlaceRepository
 from app.infrastructure.repositories.in_memory_users import InMemoryUserRepository
+from tests.unit.test_add_access_repository import Clock
 
 
 def add_place(repository, name="Газпром", categories=(PlaceCategory.FUEL,), user_id=42) -> Place:
@@ -107,7 +108,9 @@ def test_user_page_reports_how_many_places_each_added() -> None:
     users.record_seen(1, full_name="Ali", username="ali")
     add_place(places, user_id=1)
 
-    page = ListUsersPageUseCase(users, places, InMemoryAddAccessRepository()).execute(page=0, page_size=10)
+    page = ListUsersPageUseCase(users, places, InMemoryAddAccessRepository()).execute(
+        page=0, page_size=10
+    )
 
     assert page.total == 1
     assert page.rows[0].places == 1
@@ -118,8 +121,11 @@ def test_user_page_numbers_start_at_zero() -> None:
     for user_id in (1, 2, 3):
         users.record_seen(user_id, full_name=f"U{user_id}", username=None)
 
-    first = ListUsersPageUseCase(users, InMemoryPlaceRepository(), InMemoryAddAccessRepository()).execute(page=0, page_size=2)
-    second = ListUsersPageUseCase(users, InMemoryPlaceRepository(), InMemoryAddAccessRepository()).execute(page=1, page_size=2)
+    use_case = ListUsersPageUseCase(
+        users, InMemoryPlaceRepository(), InMemoryAddAccessRepository()
+    )
+    first = use_case.execute(page=0, page_size=2)
+    second = use_case.execute(page=1, page_size=2)
 
     assert len(first.rows) == 2
     assert len(second.rows) == 1
@@ -129,7 +135,9 @@ def test_a_negative_page_is_read_as_the_first_page() -> None:
     users = InMemoryUserRepository()
     users.record_seen(1, full_name="Ali", username=None)
 
-    page = ListUsersPageUseCase(users, InMemoryPlaceRepository(), InMemoryAddAccessRepository()).execute(page=-3, page_size=10)
+    page = ListUsersPageUseCase(
+        users, InMemoryPlaceRepository(), InMemoryAddAccessRepository()
+    ).execute(page=-3, page_size=10)
 
     assert len(page.rows) == 1
 
@@ -391,3 +399,22 @@ def test_a_refused_driver_is_neither_allowed_nor_waiting() -> None:
 
     assert page.rows[0].may_add is False
     assert page.rows[0].awaiting is False
+
+
+def test_a_days_old_request_leaves_the_user_list_unmarked() -> None:
+    # Unanswered for a day, the driver reads as one who never asked: no mark,
+    # and no place near the top the admin reserves for live business.
+    clock = Clock(datetime(2026, 8, 26, 12, 0))
+    access = InMemoryAddAccessRepository(clock=clock)
+    users = InMemoryUserRepository()
+    places = InMemoryPlaceRepository()
+    users.record_seen(1, full_name="Forgotten", username=None)
+    users.record_seen(2, full_name="Busy", username=None)
+    add_place(places, user_id=2)
+    access.set_status(1, AddAccessStatus.PENDING)
+    clock.move(timedelta(hours=25))
+
+    page = ListUsersPageUseCase(users, places, access).execute(page=0, page_size=10)
+
+    assert [row.user.full_name for row in page.rows] == ["Busy", "Forgotten"]
+    assert [row.awaiting for row in page.rows] == [False, False]

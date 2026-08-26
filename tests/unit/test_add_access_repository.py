@@ -1,3 +1,7 @@
+import sqlite3
+from contextlib import closing
+from datetime import datetime, timedelta
+
 import pytest
 
 from app.domain.value_objects.add_access import AddAccessStatus
@@ -83,3 +87,93 @@ def test_a_revoked_driver_leaves_the_standings(access) -> None:
     access.clear(1)
 
     assert access.statuses() == {}
+
+
+class Clock:
+    """A hand-wound clock, so a day can pass inside a test."""
+
+    def __init__(self, now: datetime) -> None:
+        self.now = now
+
+    def __call__(self) -> datetime:
+        return self.now
+
+    def move(self, delta: timedelta) -> None:
+        self.now += delta
+
+
+@pytest.fixture(params=["memory", "sqlite"])
+def clocked(request, tmp_path):
+    clock = Clock(datetime(2026, 8, 26, 12, 0))
+    if request.param == "memory":
+        return InMemoryAddAccessRepository(clock=clock), clock
+    return SQLiteAddAccessRepository(tmp_path / "access.sqlite3", clock=clock), clock
+
+
+def test_a_request_the_admins_never_answered_stops_counting_after_a_day(clocked) -> None:
+    # An unanswered request must not leave a driver waiting forever: after a
+    # day they stand exactly where they did before asking, free to ask again.
+    access, clock = clocked
+    access.set_status(1, AddAccessStatus.PENDING)
+
+    clock.move(timedelta(hours=25))
+
+    assert access.status(1) is None
+    assert access.statuses() == {}
+
+
+def test_a_request_still_counts_inside_the_day(clocked) -> None:
+    access, clock = clocked
+    access.set_status(1, AddAccessStatus.PENDING)
+
+    clock.move(timedelta(hours=23))
+
+    assert access.status(1) == AddAccessStatus.PENDING
+
+
+def test_an_answered_request_never_goes_stale(clocked) -> None:
+    # Only the waiting expires. A permission granted a month ago still holds,
+    # and so does a refusal.
+    access, clock = clocked
+    access.set_status(1, AddAccessStatus.APPROVED)
+    access.set_status(2, AddAccessStatus.REJECTED)
+
+    clock.move(timedelta(days=30))
+
+    assert access.status(1) == AddAccessStatus.APPROVED
+    assert access.status(2) == AddAccessStatus.REJECTED
+
+
+def test_asking_again_restarts_the_day(clocked) -> None:
+    access, clock = clocked
+    access.set_status(1, AddAccessStatus.PENDING)
+    clock.move(timedelta(hours=25))
+
+    access.set_status(1, AddAccessStatus.PENDING)
+    clock.move(timedelta(hours=1))
+
+    assert access.status(1) == AddAccessStatus.PENDING
+
+
+def test_a_database_written_before_standings_were_dated_still_opens(tmp_path) -> None:
+    # The deploy meets tables holding only (user_id, status). The column is
+    # added and the rows dated at that moment, so a driver waiting across the
+    # deploy gets their full day instead of expiring the instant it lands.
+    path = tmp_path / "legacy.sqlite3"
+    with closing(sqlite3.connect(path)) as connection:
+        connection.execute(
+            "CREATE TABLE add_access (user_id INTEGER PRIMARY KEY, status TEXT NOT NULL)"
+        )
+        connection.execute("INSERT INTO add_access VALUES (1, 'pending'), (2, 'approved')")
+        connection.commit()
+
+    clock = Clock(datetime(2026, 8, 26, 12, 0))
+    access = SQLiteAddAccessRepository(path, clock=clock)
+
+    assert access.status(1) == AddAccessStatus.PENDING
+    assert access.status(2) == AddAccessStatus.APPROVED
+
+    clock.move(timedelta(hours=25))
+
+    assert access.status(1) is None
+    assert access.status(2) == AddAccessStatus.APPROVED
