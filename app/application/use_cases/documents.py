@@ -79,6 +79,16 @@ class AddDocumentUseCase:
         return DocumentCard(document=saved, place=place)
 
 
+class CountDocumentsByPlaceUseCase:
+    """How many documents each place carries — what ranks the place picker."""
+
+    def __init__(self, documents: DocumentRepository) -> None:
+        self._documents = documents
+
+    def execute(self) -> dict[int, int]:
+        return self._documents.count_by_place()
+
+
 class ListDocumentsPageUseCase:
     def __init__(self, documents: DocumentRepository, places: PlaceRepository) -> None:
         self._documents = documents

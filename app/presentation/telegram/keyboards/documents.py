@@ -29,15 +29,30 @@ def build_documents_page_keyboard(page: DocumentsPage) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
+DOCUMENTED_MARK = "📝"
+
+
 def build_place_pick_keyboard(
-    places: list[Place], page: int, prefix: str = "add_doc"
+    places: list[Place],
+    page: int,
+    prefix: str = "add_doc",
+    documented: frozenset[int] = frozenset(),
 ) -> InlineKeyboardMarkup:
-    """One button per place for pinning a document, seven a page."""
+    """One button per place for pinning a document, seven a page.
+
+    ``documented`` marks the places that already carry documents — the caller
+    has ranked them first, and the mark says why they lead the list.
+    """
     start = page * PLACES_PER_PICK_PAGE
     rows = [
         [
             InlineKeyboardButton(
-                text=place.name, callback_data=f"{prefix}:place:{place.id}"
+                text=(
+                    f"{DOCUMENTED_MARK} {place.name}"
+                    if place.id in documented
+                    else place.name
+                ),
+                callback_data=f"{prefix}:place:{place.id}",
             )
         ]
         for place in places[start : start + PLACES_PER_PICK_PAGE]

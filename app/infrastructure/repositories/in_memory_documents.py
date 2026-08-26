@@ -35,6 +35,12 @@ class InMemoryDocumentRepository:
             if document.added_by_user_id == user_id
         )
 
+    def count_by_place(self) -> dict[int, int]:
+        counts: dict[int, int] = {}
+        for document in self._documents.values():
+            counts[document.place_id] = counts.get(document.place_id, 0) + 1
+        return counts
+
     def update(
         self,
         document_id: int,

@@ -30,6 +30,7 @@ from app.application.use_cases.access import (
 )
 from app.application.use_cases.documents import (
     AddDocumentUseCase,
+    CountDocumentsByPlaceUseCase,
     GetDocumentUseCase,
     ListDocumentsPageUseCase,
     ListMyDocumentsUseCase,
@@ -112,6 +113,7 @@ def create_dispatcher(
         list_my_documents=ListMyDocumentsUseCase(documents_repository, repository),
         get_document=GetDocumentUseCase(documents_repository, repository),
         update_document=UpdateDocumentUseCase(documents_repository, repository),
+        count_documents_by_place=CountDocumentsByPlaceUseCase(documents_repository),
         admin_ids=all_admins,
         super_admin_ids=super_admin_ids,
         road_router=road_router,

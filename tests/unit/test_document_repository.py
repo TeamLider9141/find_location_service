@@ -129,3 +129,16 @@ def test_a_stranger_may_not_edit(repository) -> None:
 
 def test_updating_a_missing_document_is_none(repository) -> None:
     assert repository.update(999, user_id=1, note="x") is None
+
+
+def test_documents_are_counted_per_place(repository) -> None:
+    # The place picker ranks by this, so it asks for the whole map at once.
+    add(repository, place_id=1)
+    add(repository, place_id=1, note="yana biri")
+    add(repository, place_id=2)
+
+    assert repository.count_by_place() == {1: 2, 2: 1}
+
+
+def test_an_empty_repository_counts_no_places(repository) -> None:
+    assert repository.count_by_place() == {}

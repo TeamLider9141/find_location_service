@@ -10,6 +10,7 @@ from aiogram.types import CallbackQuery, Message
 from app.application.use_cases.access import HasAddAccessUseCase
 from app.application.use_cases.documents import (
     AddDocumentUseCase,
+    CountDocumentsByPlaceUseCase,
     DocumentCard,
     GetDocumentUseCase,
     ListDocumentsPageUseCase,
@@ -243,14 +244,16 @@ async def handle_add_document_start(
     admin_ids: tuple[int, ...],
     has_add_access: HasAddAccessUseCase,
     find_places: FindPlacesUseCase,
+    count_documents_by_place: CountDocumentsByPlaceUseCase,
 ) -> None:
     if not _may_contribute(message, admin_ids, has_add_access):
         await message.answer(CLOSED_MESSAGE)
         return
 
-    places = await _all_places(message, find_places)
-    if places is None:
+    picking = await _places_for_picking(message, find_places, count_documents_by_place)
+    if picking is None:
         return
+    places, documented = picking
     if not places:
         await message.answer(NO_PLACES_MESSAGE)
         return
@@ -260,13 +263,16 @@ async def handle_add_document_start(
     await state.set_data({})
     await state.set_state(AddDocument.place)
     await message.answer(
-        ATTACH_PLACE_MESSAGE, reply_markup=build_place_pick_keyboard(places, page=0)
+        ATTACH_PLACE_MESSAGE,
+        reply_markup=build_place_pick_keyboard(places, page=0, documented=documented),
     )
 
 
 @router.callback_query(AddDocument.place, F.data.startswith("add_doc:pick_page:"))
 async def handle_pick_page(
-    callback_query: CallbackQuery, find_places: FindPlacesUseCase
+    callback_query: CallbackQuery,
+    find_places: FindPlacesUseCase,
+    count_documents_by_place: CountDocumentsByPlaceUseCase,
 ) -> None:
     page = _parse_id(callback_query.data, "add_doc:pick_page:")
     message = answerable_message(callback_query)
@@ -274,16 +280,19 @@ async def handle_pick_page(
         await callback_query.answer(EXPIRED_MESSAGE)
         return
 
-    places = await _all_places(message, find_places)
-    if not places:
+    picking = await _places_for_picking(message, find_places, count_documents_by_place)
+    if not picking or not picking[0]:
         await callback_query.answer()
         return
 
+    places, documented = picking
     # Redraw in place: paging through fifty places must not leave fifty
     # keyboards behind.
     try:
         await message.edit_reply_markup(
-            reply_markup=build_place_pick_keyboard(places, page=page)
+            reply_markup=build_place_pick_keyboard(
+                places, page=page, documented=documented
+            )
         )
     except TelegramAPIError as error:
         report_service_error(error, "place pick page")
@@ -662,14 +671,31 @@ async def _send_document_card(
         )
 
 
-async def _all_places(message: Message, find_places: FindPlacesUseCase):
-    """Every place, or None after telling the driver the database is down."""
+async def _places_for_picking(
+    message: Message,
+    find_places: FindPlacesUseCase,
+    count_documents_by_place: CountDocumentsByPlaceUseCase,
+) -> tuple[list, frozenset[int]] | None:
+    """Every place ranked for the picker, or None after reporting the outage.
+
+    Places already carrying documents lead the list — they are where papers
+    are asked for, so they are where the next document most likely belongs —
+    and the returned set marks them so the keyboard can say why.
+    """
     try:
-        return find_places.execute(limit=-1)
+        places = find_places.execute(limit=-1)
+        documented = frozenset(
+            place_id
+            for place_id, total in count_documents_by_place.execute().items()
+            if total > 0
+        )
     except sqlite3.Error as error:
         report_service_error(error, "places for document")
         await message.answer(DATABASE_ERROR_MESSAGE)
         return None
+
+    # A stable sort: the documented rise, everyone else keeps their order.
+    return sorted(places, key=lambda place: place.id not in documented), documented
 
 
 def _draft_document(data: dict) -> PlaceDocument:

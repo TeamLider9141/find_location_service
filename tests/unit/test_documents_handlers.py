@@ -7,6 +7,7 @@ from aiogram.fsm.storage.memory import MemoryStorage
 from app.application.use_cases.access import DecideAddAccessUseCase, HasAddAccessUseCase
 from app.application.use_cases.documents import (
     AddDocumentUseCase,
+    CountDocumentsByPlaceUseCase,
     GetDocumentUseCase,
     ListDocumentsPageUseCase,
     ListMyDocumentsUseCase,
@@ -124,6 +125,7 @@ class World:
         self.list_my_documents = ListMyDocumentsUseCase(self.documents, self.places)
         self.get_document = GetDocumentUseCase(self.documents, self.places)
         self.update_document = UpdateDocumentUseCase(self.documents, self.places)
+        self.count_documents_by_place = CountDocumentsByPlaceUseCase(self.documents)
 
     def place(self, name: str = "Газпром"):
         return AddPlaceUseCase(self.places).execute(
@@ -186,6 +188,7 @@ async def test_adding_a_document_is_closed_to_a_plain_driver() -> None:
         admin_ids=(),
         has_add_access=world.has_add_access,
         find_places=world.find_places,
+        count_documents_by_place=world.count_documents_by_place,
     )
 
     assert CLOSED_MESSAGE in texts(message)
@@ -245,6 +248,7 @@ async def test_the_flow_walks_place_file_note_preview_save() -> None:
         admin_ids=(),
         has_add_access=world.has_add_access,
         find_places=world.find_places,
+        count_documents_by_place=world.count_documents_by_place,
     )
     assert await state.get_state() == AddDocument.place
     pick_keyboard = start.answers[0]["reply_markup"]
@@ -419,3 +423,30 @@ async def test_a_stranger_cannot_edit_someone_elses_document() -> None:
 
     assert NOT_YOURS_MESSAGE in texts(note)
     assert world.documents.get(saved.document.id).note == "CMR kerak"
+
+
+async def test_documented_places_lead_the_picker_and_wear_the_mark() -> None:
+    world = World()
+    bare = world.place(name="Hujjatsiz joy")
+    documented = world.place(name="Hujjatli joy")
+    world.add_document.execute(user_id=42, place_id=documented.id, note="CMR")
+    state = make_state()
+
+    start = FakeMessage()
+    await handle_add_document_start(
+        start,
+        state,
+        admin_ids=(),
+        has_add_access=world.has_add_access,
+        find_places=world.find_places,
+        count_documents_by_place=world.count_documents_by_place,
+    )
+
+    keyboard = start.answers[0]["reply_markup"]
+    labels = [row[0].text for row in keyboard.inline_keyboard]
+    callbacks_ = [row[0].callback_data for row in keyboard.inline_keyboard]
+    # The documented place rises to the top and says why.
+    assert labels[0] == "📝 Hujjatli joy"
+    assert callbacks_[0] == f"add_doc:place:{documented.id}"
+    assert labels[1] == "Hujjatsiz joy"
+    assert callbacks_[1] == f"add_doc:place:{bare.id}"

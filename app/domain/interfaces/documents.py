@@ -19,6 +19,13 @@ class DocumentRepository(Protocol):
     def list_by_author(self, user_id: int) -> list[PlaceDocument]:
         """Return every document this user contributed, newest first."""
 
+    def count_by_place(self) -> dict[int, int]:
+        """Return how many documents each place carries. Bare places are absent.
+
+        Read whole so the place picker can rank hundreds of places without a
+        count query each.
+        """
+
     def update(
         self,
         document_id: int,

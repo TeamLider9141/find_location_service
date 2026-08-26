@@ -87,6 +87,17 @@ class SQLiteDocumentRepository:
 
         return [_map_row(row) for row in rows]
 
+    def count_by_place(self) -> dict[int, int]:
+        with closing(self._connect()) as connection:
+            rows = connection.execute(
+                """
+                SELECT place_id, COUNT(*) AS total FROM place_documents
+                GROUP BY place_id
+                """
+            ).fetchall()
+
+        return {int(row["place_id"]): int(row["total"]) for row in rows}
+
     def update(
         self,
         document_id: int,

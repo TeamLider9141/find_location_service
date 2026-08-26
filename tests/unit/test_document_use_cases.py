@@ -167,3 +167,14 @@ def test_the_note_limit_counts_words() -> None:
     assert note_within_limit("uch so'z bor")
     assert note_within_limit("so'z " * NOTE_WORD_LIMIT)
     assert not note_within_limit("so'z " * (NOTE_WORD_LIMIT + 1))
+
+
+def test_documents_are_counted_per_place_through_the_use_case() -> None:
+    from app.application.use_cases.documents import CountDocumentsByPlaceUseCase
+
+    documents, places, place = seeded()
+    AddDocumentUseCase(documents, places).execute(
+        user_id=42, place_id=place.id, note="bitta"
+    )
+
+    assert CountDocumentsByPlaceUseCase(documents).execute() == {place.id: 1}
