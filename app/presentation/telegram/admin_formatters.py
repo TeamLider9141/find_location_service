@@ -6,6 +6,7 @@ from app.application.use_cases.admin import (
     AuthorPlaces,
     DeletionRow,
     UserDetail,
+    UserRow,
     UsersPage,
 )
 from app.domain.entities.bot_user import BotUser
@@ -18,7 +19,10 @@ from app.presentation.telegram.keyboards.categories import (
 
 EMPTY_DATABASE_MESSAGE = "Hali hech kim joy qo'shmagan."
 NO_USERS_MESSAGE = "Foydalanuvchilar yo'q."
+# The right to add places, and a request still waiting on an answer — the two
+# things about a user the list could not show, and the order it now ranks by.
 ADD_ACCESS_MARK = "📍"
+AWAITING_ACCESS_MARK = "👁‍🗨"
 NO_SEARCHES_MESSAGE = "Hali qidiruv yo'q."
 NO_PLACES_IN_CATEGORY_MESSAGE = "Bu kategoriyada hali joy yo'q."
 NO_DELETIONS_MESSAGE = "Jurnal bo'sh — hali hech narsa o'chirilmagan."
@@ -80,15 +84,20 @@ def format_users_page(page: UsersPage) -> str:
     # first user.
     first_number = page.page * page.page_size + 1
     for index, row in enumerate(page.rows, start=first_number):
-        # The pin marks the right to add places — the one thing about a user
-        # the list could not show, and the reason these rows come first.
-        pin = f"{ADD_ACCESS_MARK} " if row.may_add else ""
         lines.append(
-            f"{index}) {pin}{_user_label(row.user)} — {row.places} ta joy"
+            f"{index}) {_standing_mark(row)}{_user_label(row.user)} — {row.places} ta joy"
             f" | oxirgi faollik: {_format_stamp(row.user.last_seen_at)}"
         )
 
     return "\n".join(lines)
+
+
+def _standing_mark(row: UserRow) -> str:
+    if row.may_add:
+        return f"{ADD_ACCESS_MARK} "
+    if row.awaiting:
+        return f"{AWAITING_ACCESS_MARK} "
+    return ""
 
 
 def format_user_detail(detail: UserDetail) -> str:

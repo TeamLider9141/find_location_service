@@ -60,22 +60,26 @@ def test_a_granted_permission_survives_a_restart(tmp_path) -> None:
     assert SQLiteAddAccessRepository(path).status(42) == AddAccessStatus.APPROVED
 
 
-def test_only_approved_drivers_are_listed_as_allowed(access) -> None:
-    # The admin user list marks who may add, so it asks for the whole set at
-    # once rather than a status query per row.
+def test_every_standing_is_read_in_one_go(access) -> None:
+    # The admin user list marks who may add and who is still waiting, so it
+    # asks for every standing at once rather than a status query per row.
     access.set_status(1, AddAccessStatus.APPROVED)
     access.set_status(2, AddAccessStatus.PENDING)
     access.set_status(3, AddAccessStatus.REJECTED)
 
-    assert access.allowed_ids() == {1}
+    assert access.statuses() == {
+        1: AddAccessStatus.APPROVED,
+        2: AddAccessStatus.PENDING,
+        3: AddAccessStatus.REJECTED,
+    }
 
 
-def test_nobody_is_allowed_before_the_first_grant(access) -> None:
-    assert access.allowed_ids() == set()
+def test_nobody_has_a_standing_before_the_first_request(access) -> None:
+    assert access.statuses() == {}
 
 
-def test_a_revoked_driver_leaves_the_allowed_set(access) -> None:
+def test_a_revoked_driver_leaves_the_standings(access) -> None:
     access.set_status(1, AddAccessStatus.APPROVED)
     access.clear(1)
 
-    assert access.allowed_ids() == set()
+    assert access.statuses() == {}

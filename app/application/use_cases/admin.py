@@ -7,6 +7,7 @@ from app.domain.interfaces.add_access import AddAccessRepository
 from app.domain.interfaces.deletions import DeletionLog
 from app.domain.interfaces.places import PlaceRepository
 from app.domain.interfaces.users import UserRepository
+from app.domain.value_objects.add_access import AddAccessStatus
 from app.domain.value_objects.category import PlaceCategory
 
 TOP_AUTHOR_LIMIT = 10
@@ -37,6 +38,7 @@ class UserRow:
     user: BotUser
     places: int
     may_add: bool = False
+    awaiting: bool = False
 
 
 @dataclass(frozen=True)
@@ -135,14 +137,15 @@ class ListUsersPageUseCase:
             offset=0, limit=self._users.count(), exclude_ids=exclude_ids
         )
 
-        allowed = self._access.allowed_ids()
+        standings = self._access.statuses()
         places = self._places.count_by_author()
         rows = sorted(
             (
                 UserRow(
                     user=user,
                     places=places.get(user.id, 0),
-                    may_add=user.id in allowed,
+                    may_add=standings.get(user.id) == AddAccessStatus.APPROVED,
+                    awaiting=standings.get(user.id) == AddAccessStatus.PENDING,
                 )
                 for user in users
             ),
@@ -158,9 +161,18 @@ class ListUsersPageUseCase:
         )
 
 
-def _user_rank(row: UserRow) -> tuple[bool, int, float, int]:
-    # Sorted ascending, so every key is negated into "best first".
-    return (not row.may_add, -row.places, -row.user.last_seen_at.timestamp(), -row.user.id)
+def _user_rank(row: UserRow) -> tuple[int, int, float, int]:
+    # Sorted ascending, so every key reads "best first": holders, then the
+    # drivers still waiting on an answer — the admin's own unfinished
+    # business — then everyone else.
+    if row.may_add:
+        standing = 0
+    elif row.awaiting:
+        standing = 1
+    else:
+        standing = 2
+
+    return (standing, -row.places, -row.user.last_seen_at.timestamp(), -row.user.id)
 
 
 class GetUserDetailUseCase:

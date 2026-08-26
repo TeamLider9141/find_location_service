@@ -14,9 +14,5 @@ class InMemoryAddAccessRepository:
     def clear(self, user_id: int) -> None:
         self._statuses.pop(user_id, None)
 
-    def allowed_ids(self) -> set[int]:
-        return {
-            user_id
-            for user_id, status in self._statuses.items()
-            if status == AddAccessStatus.APPROVED
-        }
+    def statuses(self) -> dict[int, AddAccessStatus]:
+        return dict(self._statuses)

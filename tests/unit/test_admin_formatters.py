@@ -337,3 +337,21 @@ def test_the_user_list_pins_who_may_add() -> None:
 
     assert "📍" in allowed
     assert "📍" not in reader
+
+
+def test_the_user_list_marks_who_is_waiting_for_an_answer() -> None:
+    page = UsersPage(
+        total=2,
+        page=0,
+        page_size=5,
+        rows=[
+            UserRow(user=make_user(user_id=1, full_name="Waiting"), places=0, awaiting=True),
+            UserRow(user=make_user(user_id=2, full_name="Reader"), places=0),
+        ],
+    )
+
+    waiting, reader = format_users_page(page).splitlines()[-2:]
+
+    assert "👁‍🗨" in waiting
+    assert "📍" not in waiting
+    assert "👁‍🗨" not in reader

@@ -359,3 +359,35 @@ def test_hidden_users_stay_out_of_the_ranked_list() -> None:
 
     assert [row.user.full_name for row in page.rows] == ["Ordinary"]
     assert page.total == 1
+
+
+def test_a_pending_request_ranks_below_access_and_above_the_rest() -> None:
+    # A pending driver is the admin's own unfinished business, so they sit
+    # where they will be seen — under the holders, over everyone else.
+    users = InMemoryUserRepository()
+    places = InMemoryPlaceRepository()
+    access = InMemoryAddAccessRepository()
+    for user_id, name in ((1, "Allowed"), (2, "Waiting"), (3, "Busy")):
+        users.record_seen(user_id, full_name=name, username=None)
+    add_place(places, user_id=3)
+    access.set_status(1, AddAccessStatus.APPROVED)
+    access.set_status(2, AddAccessStatus.PENDING)
+
+    page = ListUsersPageUseCase(users, places, access).execute(page=0, page_size=10)
+
+    assert [row.user.full_name for row in page.rows] == ["Allowed", "Waiting", "Busy"]
+    assert [row.awaiting for row in page.rows] == [False, True, False]
+
+
+def test_a_refused_driver_is_neither_allowed_nor_waiting() -> None:
+    users = InMemoryUserRepository()
+    access = InMemoryAddAccessRepository()
+    users.record_seen(1, full_name="Refused", username=None)
+    access.set_status(1, AddAccessStatus.REJECTED)
+
+    page = ListUsersPageUseCase(users, InMemoryPlaceRepository(), access).execute(
+        page=0, page_size=10
+    )
+
+    assert page.rows[0].may_add is False
+    assert page.rows[0].awaiting is False
