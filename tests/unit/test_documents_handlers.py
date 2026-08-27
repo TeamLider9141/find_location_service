@@ -330,10 +330,12 @@ async def test_a_note_over_the_word_limit_is_sent_back() -> None:
     state = make_state()
     await state.set_state(AddDocument.content)
 
-    note = FakeMessage(text="so'z " * 201)
+    from app.application.use_cases.documents import NOTE_WORD_LIMIT
+
+    note = FakeMessage(text="so'z " * (NOTE_WORD_LIMIT + 1))
     await handle_content_note(note, state, world.get_place)
 
-    assert "200 so'zdan oshmasin" in texts(note)
+    assert f"{NOTE_WORD_LIMIT} so'zdan oshmasin" in texts(note)
     assert await state.get_state() == AddDocument.content
 
 
