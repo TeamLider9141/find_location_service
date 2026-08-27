@@ -17,8 +17,10 @@ from app.domain.value_objects.attachment import AttachmentKind
 
 DOCUMENTS_PAGE_SIZE = 7
 
-# The note describes which papers a place asks for — a listing, not an essay.
-NOTE_WORD_LIMIT = 200
+# The note describes which papers a place asks for. Roomy enough for a full
+# checklist with explanations; the display layers shorten it where Telegram's
+# own limits demand it.
+NOTE_WORD_LIMIT = 600
 
 
 def note_within_limit(note: str) -> bool:
