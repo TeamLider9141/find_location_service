@@ -9,6 +9,9 @@ of quiet does not deserve seven identical files.
 import asyncio
 import hashlib
 import logging
+import sqlite3
+import tempfile
+from contextlib import closing
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -56,10 +59,8 @@ class DatabaseBackup:
         The digest is remembered only after at least one copy lands: a send
         that reached nobody must not silence tomorrow's attempt.
         """
-        try:
-            data = self._path.read_bytes()
-        except OSError as error:
-            logger.warning("database backup read failed: %s", error)
+        data = self._snapshot()
+        if data is None:
             return False
 
         digest = hashlib.sha256(data).hexdigest()
@@ -85,3 +86,28 @@ class DatabaseBackup:
         if sent_any:
             self._last_sent_digest = digest
         return sent_any
+
+    def _snapshot(self) -> bytes | None:
+        """A whole copy of the database, safe to take while the bot writes.
+
+        SQLite's own backup API instead of reading the file raw: a raw read
+        can catch the bytes between two pages of a write and mail a copy that
+        does not open.
+        """
+        # connect() would create an empty database where none exists, and an
+        # empty file mailed daily would read as "the data is gone".
+        if not self._path.exists():
+            logger.warning("database backup skipped: %s does not exist", self._path)
+            return None
+
+        try:
+            with tempfile.TemporaryDirectory() as folder:
+                copy_path = Path(folder) / self._path.name
+                with closing(sqlite3.connect(self._path)) as source, closing(
+                    sqlite3.connect(copy_path)
+                ) as copy:
+                    source.backup(copy)
+                return copy_path.read_bytes()
+        except (sqlite3.Error, OSError) as error:
+            logger.warning("database backup snapshot failed: %s", error)
+            return None

@@ -1,3 +1,6 @@
+import sqlite3
+from contextlib import closing
+
 from aiogram.exceptions import TelegramForbiddenError
 
 from app.presentation.telegram.database_backup import (
@@ -18,10 +21,19 @@ class FakeBot:
         self.documents.append((chat_id, document.filename, caption))
 
 
-def database(tmp_path, content: bytes = b"v1"):
+def database(tmp_path):
     path = tmp_path / "bot.sqlite3"
-    path.write_bytes(content)
+    with closing(sqlite3.connect(path)) as connection:
+        connection.execute("CREATE TABLE places (name TEXT)")
+        connection.execute("INSERT INTO places VALUES ('Газпром')")
+        connection.commit()
     return path
+
+
+def grow(path) -> None:
+    with closing(sqlite3.connect(path)) as connection:
+        connection.execute("INSERT INTO places VALUES ('Кафе М5')")
+        connection.commit()
 
 
 async def test_the_first_check_mails_every_super(tmp_path) -> None:
@@ -51,7 +63,7 @@ async def test_a_changed_database_is_sent_again(tmp_path) -> None:
     backup = DatabaseBackup(bot, path, super_admin_ids=(1,))
     await backup.check_and_send()
 
-    path.write_bytes(b"v2 - a driver added a place")
+    grow(path)
 
     assert await backup.check_and_send() is True
     assert len(bot.documents) == 2
@@ -86,3 +98,17 @@ async def test_a_missing_file_is_a_quiet_no(tmp_path) -> None:
 
 def test_the_default_interval_is_a_day() -> None:
     assert CHECK_INTERVAL_SECONDS == 24 * 60 * 60
+
+
+async def test_the_mailed_copy_is_a_database_that_opens(tmp_path) -> None:
+    # Snapshotted through sqlite's backup API, not read raw: a raw read can
+    # catch the file mid-write and mail a copy that does not open.
+    class Capture(FakeBot):
+        async def send_document(self, chat_id, document, caption=None, **_):
+            self.payload = document.data
+            await super().send_document(chat_id, document, caption)
+
+    bot = Capture()
+    await DatabaseBackup(bot, database(tmp_path), super_admin_ids=(1,)).check_and_send()
+
+    assert bot.payload.startswith(b"SQLite format 3")
