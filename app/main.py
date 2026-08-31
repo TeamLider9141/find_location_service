@@ -17,6 +17,7 @@ from app.presentation.telegram.bot import (
     create_user_settings_store,
 )
 from app.presentation.telegram.commands import configure_commands
+from app.presentation.telegram.database_backup import DatabaseBackup
 from app.presentation.telegram.notifications import announce_startup
 from app.shared.logging import configure_logging
 
@@ -45,6 +46,9 @@ async def run_bot() -> int:
         road_router=create_road_router(settings),
         overview_map=create_overview_map(settings),
     )
+    # The daily database copy to the supers — sent only when the file changed.
+    backup = DatabaseBackup(bot, settings.database_path, settings.super_admin_ids)
+    backup_task = asyncio.create_task(backup.run())
     try:
         await configure_commands(bot, settings.all_admin_ids)
         # Supers only: restarts are routine — deploys, cron — and the ordinary
@@ -52,6 +56,7 @@ async def run_bot() -> int:
         await announce_startup(bot, settings.super_admin_ids)
         await dispatcher.start_polling(bot)
     finally:
+        backup_task.cancel()
         await bot.session.close()
     return 0
 
