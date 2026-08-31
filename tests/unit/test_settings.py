@@ -232,3 +232,30 @@ def test_a_google_key_is_read_and_defaults_to_blank() -> None:
 
     assert bare.google_maps_api_key == ""
     assert keyed.google_maps_api_key == "abc123"
+
+
+def test_the_backup_interval_default_matches_the_backup_module() -> None:
+    from app.presentation.telegram.database_backup import CHECK_INTERVAL_SECONDS
+
+    settings = Settings.from_sources(env={}, dotenv_path=None)
+
+    assert settings.backup_check_interval_seconds == CHECK_INTERVAL_SECONDS
+
+
+def test_the_backup_interval_is_tuned_from_the_environment() -> None:
+    settings = Settings.from_sources(
+        env={"BACKUP_CHECK_INTERVAL_SECONDS": "3600"}, dotenv_path=None
+    )
+
+    assert settings.backup_check_interval_seconds == 3600.0
+
+
+def test_a_backup_interval_of_zero_is_refused() -> None:
+    # Zero would check in a busy loop; an unreadable value is a typo, not a
+    # wish. Both fall back to the daily default.
+    for broken in ("0", "-5", "har kuni"):
+        settings = Settings.from_sources(
+            env={"BACKUP_CHECK_INTERVAL_SECONDS": broken}, dotenv_path=None
+        )
+
+        assert settings.backup_check_interval_seconds == 24 * 60 * 60

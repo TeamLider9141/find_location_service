@@ -73,6 +73,7 @@ Settings are read from `.env`; environment variables override it when both are p
 | `SUPER_ADMIN_IDS` | Comma separated ids of super admins: everything above, plus delete and broadcast. |
 | `OSRM_BASE_URL` | OSRM server for road distances in the nearby search. Defaults to the public demo server; blank disables routing. |
 | `GOOGLE_MAPS_API_KEY` | Optional Google Routes API key. When set, Google answers first and OSRM becomes the fallback. |
+| `BACKUP_CHECK_INTERVAL_SECONDS` | How often the bot checks whether the database changed and mails it to the supers. Defaults to 86400 (daily), must be above 0. |
 | `THROTTLE_BURST` | Messages a driver may send back to back. Defaults to 5, minimum 1. |
 | `THROTTLE_REFILL_PER_SECOND` | Messages a second a driver earns back. Defaults to 1.0, must be above 0. |
 | `THROTTLE_WARNING_SECONDS` | Seconds between two throttle replies. Defaults to 10; 0 answers every dropped message. |

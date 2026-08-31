@@ -19,6 +19,12 @@ class Settings:
     # OSRM as the fallback. Blank means Google is simply not asked.
     google_maps_api_key: str = ""
 
+    # How often the bot checks whether the database changed and, if so, mails
+    # it to the super admins. Repeats the default in database_backup rather
+    # than importing it — config must not depend on the presentation layer; a
+    # test asserts the two copies agree.
+    backup_check_interval_seconds: float = 24 * 60 * 60
+
     # These repeat the defaults in the throttling middleware rather than import
     # them: config must not depend on the presentation layer. A test asserts the
     # two copies agree.
@@ -48,6 +54,13 @@ class Settings:
             super_admin_ids=_read_admin_ids(values.get("SUPER_ADMIN_IDS", "")),
             osrm_base_url=values.get("OSRM_BASE_URL", cls.osrm_base_url).strip(),
             google_maps_api_key=values.get("GOOGLE_MAPS_API_KEY", "").strip(),
+            backup_check_interval_seconds=_read_number(
+                values.get("BACKUP_CHECK_INTERVAL_SECONDS"),
+                cls.backup_check_interval_seconds,
+                float,
+                minimum=0,
+                inclusive=False,
+            ),
             throttle_burst=_read_number(
                 values.get("THROTTLE_BURST"), cls.throttle_burst, int, minimum=1
             ),

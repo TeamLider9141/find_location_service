@@ -47,7 +47,12 @@ async def run_bot() -> int:
         overview_map=create_overview_map(settings),
     )
     # The daily database copy to the supers — sent only when the file changed.
-    backup = DatabaseBackup(bot, settings.database_path, settings.super_admin_ids)
+    backup = DatabaseBackup(
+        bot,
+        settings.database_path,
+        settings.super_admin_ids,
+        interval_seconds=settings.backup_check_interval_seconds,
+    )
     backup_task = asyncio.create_task(backup.run())
     try:
         await configure_commands(bot, settings.all_admin_ids)
