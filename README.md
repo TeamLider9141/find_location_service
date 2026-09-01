@@ -125,6 +125,18 @@ The unit sets `WorkingDirectory` so `.env` is found, restarts the bot when it di
 sends its log to the journal. Edit the paths in it if the deployment does not live at
 `/home/ubuntu/find_location_service`.
 
+Check for a unit already installed under another spelling before adding this one — a
+second unit does not replace the first, it runs beside it, and two bots on one token
+answer each other with `TelegramConflictError` forever while `Restart=always` revives
+whichever one is killed:
+
+```bash
+systemctl list-unit-files | grep -i 'find.location'
+```
+
+The dot matches both `find_location` and `find-location`; searching for one spelling
+finds nothing and says so convincingly.
+
 ## Run Tests
 
 ```bash
