@@ -1,0 +1,45 @@
+# The bot as a managed service: restarted when it dies, started when the
+# server boots, logged where journalctl can find it.
+#
+#   sudo cp deploy/find_location.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now find_location
+#
+# Paths assume the deployment at /home/ubuntu/find_location_service. Edit
+# User, WorkingDirectory and ExecStart together if yours differs.
+
+[Unit]
+Description=Find Location Telegram bot
+# The bot's first act is a call to Telegram, so a routable address must exist
+# already: network-online, not merely network.
+After=network-online.target
+Wants=network-online.target
+# Telegram rate-limits a bot that reconnects in a tight loop, so a crash that
+# repeats gives up rather than digs deeper. These two belong in [Unit]: in
+# [Service] systemd only warns and ignores them.
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/home/ubuntu/find_location_service
+ExecStart=/home/ubuntu/find_location_service/.venv/bin/python -m app.main
+
+# Settings are read from ./.env, a path relative to WorkingDirectory above.
+# Started from anywhere else the bot finds no file and quietly runs on
+# defaults — no token, no admins.
+
+# Python buffers stdout when it is a pipe, which journalctl is: without this
+# the log arrives in blocks, minutes after the event it describes.
+Environment=PYTHONUNBUFFERED=1
+
+Restart=always
+RestartSec=5
+
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

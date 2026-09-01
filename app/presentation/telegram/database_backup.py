@@ -46,6 +46,14 @@ class DatabaseBackup:
         not mail a copy nobody asked for, and the file at startup is the
         baseline the first comparison runs against anyway.
         """
+        # Settings are read once, at startup: an interval edited in .env
+        # afterwards does not reach a process already running. Printing the
+        # number the loop actually holds is the only way to tell the two apart.
+        logger.info(
+            "database backup loop started: checking %s every %s seconds",
+            self._path,
+            self._interval,
+        )
         while True:
             await asyncio.sleep(self._interval)
             try:
@@ -65,6 +73,9 @@ class DatabaseBackup:
 
         digest = hashlib.sha256(data).hexdigest()
         if digest == self._last_sent_digest:
+            # A quiet loop and a dead one read the same in a log unless the
+            # quiet one says why it stayed quiet.
+            logger.info("database backup skipped: unchanged since the last copy")
             return False
 
         stamp = datetime.now(timezone.utc).strftime("%Y-%m-%d")
@@ -85,6 +96,7 @@ class DatabaseBackup:
 
         if sent_any:
             self._last_sent_digest = digest
+            logger.info("database backup sent: %s, %s bytes", filename, len(data))
         return sent_any
 
     def _snapshot(self) -> bytes | None:

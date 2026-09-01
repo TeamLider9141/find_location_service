@@ -1,3 +1,5 @@
+import asyncio
+import logging
 import sqlite3
 from contextlib import closing
 
@@ -112,3 +114,38 @@ async def test_the_mailed_copy_is_a_database_that_opens(tmp_path) -> None:
     await DatabaseBackup(bot, database(tmp_path), super_admin_ids=(1,)).check_and_send()
 
     assert bot.payload.startswith(b"SQLite format 3")
+
+
+async def test_the_loop_announces_the_interval_it_is_running_with(tmp_path, caplog) -> None:
+    # .env said one number and the running process held another, with no way
+    # to tell the two apart from outside. This line is that way.
+    backup = DatabaseBackup(
+        FakeBot(), database(tmp_path), super_admin_ids=(1,), interval_seconds=3600
+    )
+
+    with caplog.at_level(logging.INFO):
+        task = asyncio.create_task(backup.run())
+        await asyncio.sleep(0)
+        task.cancel()
+
+    assert "3600" in caplog.text
+
+
+async def test_a_mailed_copy_is_logged(tmp_path, caplog) -> None:
+    backup = DatabaseBackup(FakeBot(), database(tmp_path), super_admin_ids=(1,))
+
+    with caplog.at_level(logging.INFO):
+        await backup.check_and_send()
+
+    assert "database backup sent" in caplog.text
+
+
+async def test_an_unchanged_database_says_so_in_the_log(tmp_path, caplog) -> None:
+    # Silence and a crashed task look the same in a log; "unchanged" does not.
+    backup = DatabaseBackup(FakeBot(), database(tmp_path), super_admin_ids=(1,))
+    await backup.check_and_send()
+
+    with caplog.at_level(logging.INFO):
+        await backup.check_and_send()
+
+    assert "unchanged" in caplog.text

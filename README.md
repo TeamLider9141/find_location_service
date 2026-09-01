@@ -73,7 +73,7 @@ Settings are read from `.env`; environment variables override it when both are p
 | `SUPER_ADMIN_IDS` | Comma separated ids of super admins: everything above, plus delete and broadcast. |
 | `OSRM_BASE_URL` | OSRM server for road distances in the nearby search. Defaults to the public demo server; blank disables routing. |
 | `GOOGLE_MAPS_API_KEY` | Optional Google Routes API key. When set, Google answers first and OSRM becomes the fallback. |
-| `BACKUP_CHECK_INTERVAL_SECONDS` | How often the bot checks whether the database changed and mails it to the supers. Defaults to 86400 (daily), must be above 0. |
+| `BACKUP_CHECK_INTERVAL_SECONDS` | How often the bot checks whether the database changed and mails it to the supers. Defaults to 86400 (daily), must be above 0. Read once, at startup — see below. |
 | `THROTTLE_BURST` | Messages a driver may send back to back. Defaults to 5, minimum 1. |
 | `THROTTLE_REFILL_PER_SECOND` | Messages a second a driver earns back. Defaults to 1.0, must be above 0. |
 | `THROTTLE_WARNING_SECONDS` | Seconds between two throttle replies. Defaults to 10; 0 answers every dropped message. |
@@ -82,6 +82,17 @@ Settings are read from `.env`; environment variables override it when both are p
 
 A value that is unreadable or out of range is ignored and the default used instead — a
 mistyped throttle must not be a way to lock the bot shut.
+
+`.env` is read once, when the bot starts. Editing it does not reach a process already
+running — restart the bot. The startup log prints the backup interval the loop is
+actually holding, so the file and the process can be told apart:
+
+```
+database backup loop started: checking data/find_location.sqlite3 every 86400.0 seconds
+```
+
+Environment variables win over `.env` when both set the same name, and the path is
+relative: the bot must be started from the project directory or it finds no file at all.
 
 `scripts/env_cheklovlar.sh` writes the throttle block into an existing `.env`, with the
 notes in Uzbek. It is safe to run twice; it replaces the block rather than appending to it.
@@ -99,6 +110,20 @@ the admin panel (super admins only) lists who deleted what, from where, and when
 ```bash
 python -m app.main
 ```
+
+On a server, run it under systemd rather than by hand: a bot started from a shell dies
+with the shell and does not come back after a reboot.
+
+```bash
+sudo cp deploy/find_location.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now find_location
+journalctl -u find_location -f
+```
+
+The unit sets `WorkingDirectory` so `.env` is found, restarts the bot when it dies, and
+sends its log to the journal. Edit the paths in it if the deployment does not live at
+`/home/ubuntu/find_location_service`.
 
 ## Run Tests
 
