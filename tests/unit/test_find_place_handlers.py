@@ -48,12 +48,16 @@ class FakeMessage:
         self.venue = None
         self.answers: list[dict[str, object]] = []
         self.photos: list[dict[str, object]] = []
+        self.edits: list[dict[str, object]] = []
 
     async def answer(self, text: str, **kwargs: object) -> None:
         self.answers.append({"text": text, **kwargs})
 
     async def answer_photo(self, photo: object, caption: str = "", **kwargs: object) -> None:
         self.photos.append({"photo": photo, "caption": caption, **kwargs})
+
+    async def edit_text(self, text: str, **kwargs: object) -> None:
+        self.edits.append({"text": text, **kwargs})
 
 
 class FakeLocation:
@@ -831,3 +835,88 @@ async def test_search_results_carry_the_places_documents() -> None:
 
     text = str(message.answers[0]["text"])
     assert "📁 Tex passport va CMR" in text
+
+
+def category_repository(count: int = 16) -> InMemoryPlaceRepository:
+    """One category, `count` places — more than fits on a page."""
+    repository = InMemoryPlaceRepository()
+    add = AddPlaceUseCase(repository)
+    for index in range(count):
+        add.execute(
+            user_id=42,
+            name=f"Заправка {index:02d}",
+            categories=(PlaceCategory.FUEL,),
+            coordinates=Coordinates(latitude=55.75, longitude=37.61),
+        )
+    return repository
+
+
+async def test_a_full_category_offers_the_next_page() -> None:
+    repository = category_repository()
+    query = FakeCallbackQuery("find:category:fuel")
+
+    await handle_category_browse(
+        query,
+        find_places=FindPlacesUseCase(repository),
+        user_settings=FixedSettingsStore(UserSettings(result_limit=10)),
+        count_places_by_category=CountPlacesByCategoryUseCase(repository),
+    )
+
+    keyboard = query.message.answers[0]["reply_markup"].inline_keyboard
+    assert [button.text for button in keyboard[-1]] == ["➡️"]
+    assert keyboard[-1][0].callback_data == "find:cat_page:fuel:1"
+
+
+async def test_the_next_page_carries_the_places_the_first_left_out() -> None:
+    from app.presentation.telegram.handlers.find_place import handle_category_page
+
+    repository = category_repository()
+    query = FakeCallbackQuery("find:cat_page:fuel:1")
+
+    await handle_category_page(
+        query,
+        find_places=FindPlacesUseCase(repository),
+        user_settings=FixedSettingsStore(UserSettings(result_limit=10)),
+        count_places_by_category=CountPlacesByCategoryUseCase(repository),
+    )
+
+    # Six left of sixteen, numbered on from the ten already shown.
+    edit = query.message.edits[0]
+    assert "Заправка 15" in edit["text"]
+    assert "Заправка 09" not in edit["text"]
+    assert edit["reply_markup"].inline_keyboard[0][0].text == "11"
+
+
+async def test_turning_the_page_edits_the_message_it_is_on() -> None:
+    # A new message per page would bury the list under its own history.
+    from app.presentation.telegram.handlers.find_place import handle_category_page
+
+    repository = category_repository()
+    query = FakeCallbackQuery("find:cat_page:fuel:1")
+
+    await handle_category_page(
+        query,
+        find_places=FindPlacesUseCase(repository),
+        user_settings=FixedSettingsStore(UserSettings(result_limit=10)),
+        count_places_by_category=CountPlacesByCategoryUseCase(repository),
+    )
+
+    assert len(query.message.edits) == 1
+    assert query.message.answers == []
+
+
+async def test_a_category_that_fits_on_one_page_gets_no_arrows() -> None:
+    repository = category_repository(count=3)
+    query = FakeCallbackQuery("find:category:fuel")
+
+    await handle_category_browse(
+        query,
+        find_places=FindPlacesUseCase(repository),
+        user_settings=FixedSettingsStore(UserSettings(result_limit=10)),
+        count_places_by_category=CountPlacesByCategoryUseCase(repository),
+    )
+
+    keyboard = query.message.answers[0]["reply_markup"].inline_keyboard
+    assert all(
+        button.callback_data.startswith("place:") for row in keyboard for button in row
+    )

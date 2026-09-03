@@ -132,6 +132,7 @@ def format_place_results(
     distances_meters: list[float] | None = None,
     distance_note: str | None = None,
     documents_by_place: dict[int, list[PlaceDocument]] | None = None,
+    start_number: int = 1,
 ) -> str:
     if not places:
         return NO_RESULTS_MESSAGE
@@ -140,19 +141,22 @@ def format_place_results(
     # names, notes — is escaped: one "<" in a name would otherwise make
     # Telegram refuse the whole message.
     lines: list[str] = []
-    for index, place in enumerate(places, start=1):
+    for position, place in enumerate(places, start=1):
+        # Two counters, because page two of a category starts at 11 while its
+        # distances — when there are any — still start at the top of the list.
+        number = start_number + position - 1
         # The name is the link: tapping the line the driver is already reading
         # beats hunting a raw URL under it.
         name = html.escape(place.name)
-        lines.append(f'{index}. <a href="{place_map_link(place)}">{name}</a>')
+        lines.append(f'{number}. <a href="{place_map_link(place)}">{name}</a>')
         lines.append(f"   {categories_label(place.categories)}")
         # nearby() supplies one distance per place; search() supplies none. A
         # short list is still safe to render — the places past its end simply
         # have no distance line.
-        if distances_meters is not None and index <= len(distances_meters):
+        if distances_meters is not None and position <= len(distances_meters):
             # The note says what kind of distance this is: a road distance and
             # a straight line can differ by a river's worth of kilometres.
-            distance = _format_distance(distances_meters[index - 1])
+            distance = _format_distance(distances_meters[position - 1])
             suffix = f" · {distance_note}" if distance_note else ""
             lines.append(f"   {distance}{suffix}")
         if place.note:

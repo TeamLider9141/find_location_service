@@ -44,6 +44,7 @@ class InMemoryPlaceRepository:
         name: str | None = None,
         category: PlaceCategory | None = None,
         limit: int = 10,
+        offset: int = 0,
     ) -> list[Place]:
         normalized_name = normalize_name(name) if name is not None else ""
         # Read category.value up front rather than inside the comprehension. The
@@ -60,6 +61,7 @@ class InMemoryPlaceRepository:
             )
         ]
         matches.sort(key=lambda place: place.name)
+        matches = matches[offset:]
         # SQLite reads a negative LIMIT as "no limit", and a double that quietly
         # truncated instead would hide the difference from the use case tests.
         return matches if limit < 0 else matches[:limit]

@@ -2,6 +2,7 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from app.application.use_cases.documents import DocumentsPage
 from app.domain.entities.place import Place
+from app.presentation.telegram.keyboards.pagination import navigation_row
 
 PLACES_PER_PICK_PAGE = 7
 
@@ -21,7 +22,7 @@ def build_documents_page_keyboard(page: DocumentsPage) -> InlineKeyboardMarkup:
     ]
 
     rows = [number_row] if number_row else []
-    navigation = _navigation_row(
+    navigation = navigation_row(
         page.page, page.total, page.page_size, prefix="docs:page"
     )
     if navigation:
@@ -58,7 +59,7 @@ def build_place_pick_keyboard(
         for place in places[start : start + PLACES_PER_PICK_PAGE]
     ]
 
-    navigation = _navigation_row(
+    navigation = navigation_row(
         page, len(places), PLACES_PER_PICK_PAGE, prefix=f"{prefix}:pick_page"
     )
     if navigation:
@@ -149,20 +150,3 @@ def build_document_delete_confirmation_keyboard(document_id: int) -> InlineKeybo
             ],
         ]
     )
-
-
-def _navigation_row(
-    page: int, total: int, page_size: int, prefix: str
-) -> list[InlineKeyboardButton]:
-    """Back and forward, drawn only where there is somewhere to go."""
-    total_pages = max(1, -(-total // page_size))
-    row = []
-    if page > 0:
-        row.append(
-            InlineKeyboardButton(text="⬅️", callback_data=f"{prefix}:{page - 1}")
-        )
-    if page + 1 < total_pages:
-        row.append(
-            InlineKeyboardButton(text="➡️", callback_data=f"{prefix}:{page + 1}")
-        )
-    return row

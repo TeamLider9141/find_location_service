@@ -219,3 +219,11 @@ def test_result_attachment_labels_match_the_document_card() -> None:
     from app.presentation.telegram.formatters import RESULT_ATTACHMENT_LABELS
 
     assert RESULT_ATTACHMENT_LABELS == ATTACHMENT_LABELS
+
+
+def test_the_list_can_start_numbering_past_one() -> None:
+    # Page two carries on from where page one stopped; restarting at 1 would
+    # make two different places both "1." in the same conversation.
+    text = format_place_results([make_place(name="Ветерок")], start_number=11)
+
+    assert "11. " in text

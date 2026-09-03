@@ -414,3 +414,21 @@ def test_delete_place_by_another_user_fails() -> None:
     deleter = DeletePlaceUseCase(repository, InMemoryDeletionLog())
     assert deleter.execute(stored.id, user_id=7) is None
     assert repository.get(stored.id) is not None
+
+
+def test_finding_places_walks_past_an_offset() -> None:
+    repository = InMemoryPlaceRepository()
+    add = AddPlaceUseCase(repository)
+    for name in ("Ажур", "Берёзка", "Ветерок"):
+        add.execute(
+            user_id=42,
+            name=name,
+            categories=(PlaceCategory.FUEL,),
+            coordinates=Coordinates(latitude=55.75, longitude=37.61),
+        )
+
+    second_page = FindPlacesUseCase(repository).execute(
+        category=PlaceCategory.FUEL, limit=2, offset=2
+    )
+
+    assert [place.name for place in second_page] == ["Ветерок"]

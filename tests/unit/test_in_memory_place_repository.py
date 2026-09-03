@@ -276,3 +276,23 @@ def test_add_rejects_none_as_a_category_rather_than_storing_it() -> None:
         repository.add(make_place(categories=(None,)))  # type: ignore[arg-type]
 
     assert repository.search() == []
+
+
+def test_search_skips_the_places_an_offset_names() -> None:
+    # Pagination reads the same ordering twice and steps past what it showed.
+    repository = InMemoryPlaceRepository()
+    for name in ("Ажур", "Берёзка", "Ветерок"):
+        repository.add(make_place(name=name))
+
+    first = repository.search(category=PlaceCategory.FUEL, limit=2)
+    second = repository.search(category=PlaceCategory.FUEL, limit=2, offset=2)
+
+    assert [place.name for place in first] == ["Ажур", "Берёзка"]
+    assert [place.name for place in second] == ["Ветерок"]
+
+
+def test_an_offset_past_the_end_finds_nothing() -> None:
+    repository = InMemoryPlaceRepository()
+    repository.add(make_place())
+
+    assert repository.search(limit=10, offset=10) == []

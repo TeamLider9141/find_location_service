@@ -72,6 +72,7 @@ class SQLitePlaceRepository:
         name: str | None = None,
         category: PlaceCategory | None = None,
         limit: int = 10,
+        offset: int = 0,
     ) -> list[Place]:
         conditions: list[str] = []
         parameters: list[object] = []
@@ -87,10 +88,12 @@ class SQLitePlaceRepository:
 
         where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
         parameters.append(limit)
+        parameters.append(offset)
 
         with closing(self._connect()) as connection:
             rows = connection.execute(
-                f"SELECT {_COLUMNS} FROM places {where} ORDER BY name ASC LIMIT ?",
+                f"SELECT {_COLUMNS} FROM places {where} "
+                "ORDER BY name ASC LIMIT ? OFFSET ?",
                 parameters,
             ).fetchall()
 

@@ -465,3 +465,20 @@ def test_update_writes_a_blank_name_rather_than_ignoring_it(
 
     assert updated is not None
     assert updated.name == ""
+
+
+def test_search_skips_the_places_an_offset_names(repository) -> None:
+    for name in ("Ажур", "Берёзка", "Ветерок"):
+        repository.add(make_place(name=name))
+
+    first = repository.search(category=PlaceCategory.FUEL, limit=2)
+    second = repository.search(category=PlaceCategory.FUEL, limit=2, offset=2)
+
+    assert [place.name for place in first] == ["Ажур", "Берёзка"]
+    assert [place.name for place in second] == ["Ветерок"]
+
+
+def test_an_offset_past_the_end_finds_nothing(repository) -> None:
+    repository.add(make_place())
+
+    assert repository.search(limit=10, offset=10) == []

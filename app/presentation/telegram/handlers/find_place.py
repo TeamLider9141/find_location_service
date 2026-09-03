@@ -39,9 +39,11 @@ from app.presentation.telegram.formatters import (
 from app.presentation.telegram.keyboards.menu import NEARBY_BUTTON, SEARCH_BUTTON
 from app.presentation.telegram.keyboards.places import (
     BORDER_GROUP_VALUE,
+    CATEGORY_PAGE_PREFIX,
     CHOOSE_BORDER_MESSAGE,
     build_border_choice_keyboard,
     build_category_choice_keyboard,
+    build_category_results_keyboard,
     build_place_results_keyboard,
 )
 from app.presentation.telegram.prompts import with_cancel_hint
@@ -168,16 +170,98 @@ async def handle_category_browse(
         await callback_query.answer(INVALID_SELECTION_MESSAGE)
         return
 
-    limit = user_settings.get(user_id).result_limit
+    await _send_category_page(
+        callback_query,
+        message,
+        category,
+        page=0,
+        find_places=find_places,
+        user_settings=user_settings,
+        count_places_by_category=count_places_by_category,
+        documents_for_places=documents_for_places,
+    )
+
+
+@router.callback_query(F.data.startswith(f"{CATEGORY_PAGE_PREFIX}:"))
+async def handle_category_page(
+    callback_query: CallbackQuery,
+    find_places: FindPlacesUseCase,
+    user_settings: UserSettingsStore,
+    count_places_by_category: CountPlacesByCategoryUseCase,
+    documents_for_places: DocumentsForPlacesUseCase | None = None,
+) -> None:
+    """One page further into a category, drawn over the page it replaces."""
+    message = answerable_message(callback_query)
+    if message is None:
+        await callback_query.answer(EXPIRED_MESSAGE)
+        return
+
+    parsed = _parse_category_page(callback_query.data)
+    if parsed is None:
+        await callback_query.answer(INVALID_SELECTION_MESSAGE)
+        return
+
+    category, page = parsed
+    await _send_category_page(
+        callback_query,
+        message,
+        category,
+        page=page,
+        find_places=find_places,
+        user_settings=user_settings,
+        count_places_by_category=count_places_by_category,
+        documents_for_places=documents_for_places,
+        edit=True,
+    )
+
+
+async def _send_category_page(
+    callback_query: CallbackQuery,
+    message,
+    category: PlaceCategory,
+    page: int,
+    find_places: FindPlacesUseCase,
+    user_settings: UserSettingsStore,
+    count_places_by_category: CountPlacesByCategoryUseCase,
+    documents_for_places: DocumentsForPlacesUseCase | None,
+    edit: bool = False,
+) -> None:
+    user_id = user_id_of(callback_query)
+    if user_id is None:
+        await callback_query.answer(INVALID_SELECTION_MESSAGE)
+        return
+
+    # The driver's own result count is the page size, so the setting they
+    # already understand decides how much arrives at once.
+    page_size = user_settings.get(user_id).result_limit
     try:
-        places = find_places.execute(category=category, limit=limit)
+        places = find_places.execute(
+            category=category, limit=page_size, offset=page * page_size
+        )
     except sqlite3.Error as error:
         report_service_error(error, "category browse")
         await message.answer(DATABASE_ERROR_MESSAGE)
         await callback_query.answer()
         return
 
-    await _send_results(message, places, documents_for_places=documents_for_places)
+    # The same count the category button advertises, so the arrows agree with
+    # the number the driver tapped. Without it there is simply no next page.
+    total = (_counts_or_none(count_places_by_category) or {}).get(category, len(places))
+    keyboard = build_category_results_keyboard(
+        [place.id for place in places],
+        category=category,
+        page=page,
+        total=total,
+        page_size=page_size,
+    )
+    await _send_results(
+        message,
+        places,
+        documents_for_places=documents_for_places,
+        keyboard=keyboard,
+        start_number=page * page_size + 1,
+        edit=edit,
+    )
     await callback_query.answer()
 
 
@@ -391,7 +475,14 @@ async def handle_text_query(
 
 
 async def _send_results(
-    message, places, distances=None, distance_note=None, documents_for_places=None
+    message,
+    places,
+    distances=None,
+    distance_note=None,
+    documents_for_places=None,
+    keyboard=None,
+    start_number: int = 1,
+    edit: bool = False,
 ) -> None:
     if not places:
         await message.answer(format_place_results([]))
@@ -408,16 +499,42 @@ async def _send_results(
         except sqlite3.Error as error:
             report_service_error(error, "documents for results")
 
-    await message.answer(
-        format_place_results(
-            places, distances, distance_note, documents_by_place=documents_by_place
-        ),
-        reply_markup=build_place_results_keyboard([place.id for place in places]),
+    text = format_place_results(
+        places,
+        distances,
+        distance_note,
+        documents_by_place=documents_by_place,
+        start_number=start_number,
+    )
+    markup = keyboard or build_place_results_keyboard(
+        [place.id for place in places], start_number=start_number
+    )
+    # A page turn redraws the list in place: a fresh message per page would
+    # bury the list under its own history.
+    send = message.edit_text if edit else message.answer
+    await send(
+        text,
+        reply_markup=markup,
         parse_mode="HTML",
         # Every result carries its own link already; ten link previews under
         # one list would bury the list itself.
         disable_web_page_preview=True,
     )
+
+
+def _parse_category_page(data: str | None) -> tuple[PlaceCategory, int] | None:
+    """Read ``find:cat_page:<category>:<page>`` back into its two halves."""
+    prefix = f"{CATEGORY_PAGE_PREFIX}:"
+    if data is None or not data.startswith(prefix):
+        return None
+
+    value, _, page = data.removeprefix(prefix).rpartition(":")
+    if not page.isdigit():
+        return None
+    try:
+        return PlaceCategory(value), int(page)
+    except ValueError:
+        return None
 
 
 def _parse_category(data: str | None, prefix: str) -> PlaceCategory | None:

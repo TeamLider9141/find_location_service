@@ -19,10 +19,13 @@ class PlaceRepository(Protocol):
         name: str | None = None,
         category: PlaceCategory | None = None,
         limit: int = 10,
+        offset: int = 0,
     ) -> list[Place]:
         """Return places matching a name fragment and/or a category.
 
         Both filters are optional. ``name`` matches as a normalized substring.
+        ``offset`` skips that many matches in the same ordering, so a caller
+        can walk a category a page at a time.
         """
 
     def nearby(

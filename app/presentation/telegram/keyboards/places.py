@@ -4,6 +4,7 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from app.domain.value_objects.category import PlaceCategory
 from app.presentation.telegram.keyboards.categories import category_label
+from app.presentation.telegram.keyboards.pagination import navigation_row
 
 
 # The borders live behind one button: two flags at the top level would crowd
@@ -139,14 +140,46 @@ def _category_button_label(
     return f"{label} ({total} ta)" if total else label
 
 
-def build_place_results_keyboard(place_ids: list[int]) -> InlineKeyboardMarkup:
-    """Buttons carry the database id, so a later search cannot shift the target."""
+def build_place_results_keyboard(
+    place_ids: list[int], start_number: int = 1
+) -> InlineKeyboardMarkup:
+    """Buttons carry the database id, so a later search cannot shift the target.
+
+    The numbers match the list above them, page two included: they count on
+    from ``start_number`` rather than restarting at one.
+    """
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [InlineKeyboardButton(text=f"{index}", callback_data=f"place:{place_id}")]
-            for index, place_id in enumerate(place_ids, start=1)
+            for index, place_id in enumerate(place_ids, start=start_number)
         ]
     )
+
+
+CATEGORY_PAGE_PREFIX = "find:cat_page"
+
+
+def build_category_results_keyboard(
+    place_ids: list[int],
+    category: PlaceCategory,
+    page: int,
+    total: int,
+    page_size: int,
+) -> InlineKeyboardMarkup:
+    """One category's results, with arrows when the category outgrows a page.
+
+    A category button advertises its whole count, so a list that stopped at
+    ten with no way onward read as places gone missing.
+    """
+    keyboard = build_place_results_keyboard(
+        place_ids, start_number=page * page_size + 1
+    )
+    arrows = navigation_row(
+        page, total, page_size, prefix=f"{CATEGORY_PAGE_PREFIX}:{category.value}"
+    )
+    if arrows:
+        keyboard.inline_keyboard.append(arrows)
+    return keyboard
 
 
 def build_preview_keyboard() -> InlineKeyboardMarkup:

@@ -73,8 +73,11 @@ class FindPlacesUseCase:
         name: str | None = None,
         category: PlaceCategory | None = None,
         limit: int = 10,
+        offset: int = 0,
     ) -> list[Place]:
-        return self._repository.search(name=name, category=category, limit=limit)
+        return self._repository.search(
+            name=name, category=category, limit=limit, offset=offset
+        )
 
 
 class CountPlacesByCategoryUseCase:

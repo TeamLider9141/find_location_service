@@ -192,3 +192,69 @@ def test_without_counts_the_keyboard_is_unchanged() -> None:
 
 def test_the_fallback_category_is_labelled_in_uzbek() -> None:
     assert category_label(PlaceCategory.OTHER) == "📌 Boshqa kategoriya"
+
+
+def test_the_results_keyboard_numbers_from_where_the_page_starts() -> None:
+    keyboard = build_place_results_keyboard([7, 8], start_number=11)
+
+    assert [row[0].text for row in keyboard.inline_keyboard] == ["11", "12"]
+    assert [row[0].callback_data for row in keyboard.inline_keyboard] == [
+        "place:7",
+        "place:8",
+    ]
+
+
+def test_a_category_page_offers_forward_but_not_back_on_the_first() -> None:
+    from app.presentation.telegram.keyboards.places import (
+        build_category_results_keyboard,
+    )
+
+    keyboard = build_category_results_keyboard(
+        [1, 2], category=PlaceCategory.FUEL, page=0, total=16, page_size=10
+    )
+
+    arrows = keyboard.inline_keyboard[-1]
+    assert [button.text for button in arrows] == ["➡️"]
+    assert arrows[0].callback_data == "find:cat_page:fuel:1"
+
+
+def test_the_last_category_page_offers_only_back() -> None:
+    from app.presentation.telegram.keyboards.places import (
+        build_category_results_keyboard,
+    )
+
+    keyboard = build_category_results_keyboard(
+        [1], category=PlaceCategory.FUEL, page=1, total=16, page_size=10
+    )
+
+    arrows = keyboard.inline_keyboard[-1]
+    assert [button.text for button in arrows] == ["⬅️"]
+    assert arrows[0].callback_data == "find:cat_page:fuel:0"
+
+
+def test_a_single_page_category_draws_no_arrows() -> None:
+    from app.presentation.telegram.keyboards.places import (
+        build_category_results_keyboard,
+    )
+
+    keyboard = build_category_results_keyboard(
+        [1], category=PlaceCategory.FUEL, page=0, total=1, page_size=10
+    )
+
+    assert all(
+        button.callback_data.startswith("place:")
+        for row in keyboard.inline_keyboard
+        for button in row
+    )
+
+
+def test_the_second_category_page_numbers_from_eleven() -> None:
+    from app.presentation.telegram.keyboards.places import (
+        build_category_results_keyboard,
+    )
+
+    keyboard = build_category_results_keyboard(
+        [21], category=PlaceCategory.FUEL, page=1, total=16, page_size=10
+    )
+
+    assert keyboard.inline_keyboard[0][0].text == "11"
